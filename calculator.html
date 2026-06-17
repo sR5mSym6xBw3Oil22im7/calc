@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Calculator</title>
+  <style>
+    :root {
+      --bg: #0f1115;
+      --bg-soft: #171a21;
+      --panel: #1d212a;
+      --panel-2: #242936;
+      --text: #f2f4f8;
+      --muted: #9ca3af;
+      --border: rgba(255, 255, 255, 0.08);
+      --shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+      --digit: #2b303c;
+      --digit-hover: #353c4a;
+      --operator: linear-gradient(180deg, #e8b15a 0%, #d8892b 100%);
+      --operator-hover: linear-gradient(180deg, #f2be76 0%, #e1973b 100%);
+      --equal: linear-gradient(180deg, #37a7ff 0%, #1778ff 100%);
+      --equal-hover: linear-gradient(180deg, #55b4ff 0%, #2c8cff 100%);
+      --danger: #4a1f24;
+      --danger-hover: #5c262d;
+      --history-bg: rgba(255, 255, 255, 0.03);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      height: 100%;
+    }
+
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top, rgba(55, 167, 255, 0.12), transparent 30%),
+        radial-gradient(circle at bottom right, rgba(232, 177, 90, 0.09), transparent 25%),
+        linear-gradient(180deg, #0c0e12 0%, #11141a 100%);
+      display: grid;
+      place-items: center;
+      padding: 20px;
+    }
+
+    .calculator {
+      width: min(100%, 360px);
+      background: linear-gradient(180deg, rgba(29, 33, 42, 0.96), rgba(20, 23, 30, 0.96));
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      box-shadow: var(--shadow);
+      padding: 18px;
+      backdrop-filter: blur(10px);
+    }
+
+    .brand {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+      color: var(--muted);
+      font-size: 0.86rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .badge {
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border);
+    }
+
+    .display {
+      background: linear-gradient(180deg, rgba(10, 12, 16, 0.9), rgba(22, 25, 32, 0.96));
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 16px;
+      min-height: 116px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .expression {
+      min-height: 28px;
+      font-size: 0.96rem;
+      color: var(--muted);
+      text-align: right;
+      word-break: break-all;
+    }
+
+    .result {
+      font-size: clamp(1.8rem, 7vw, 2.5rem);
+      font-weight: 700;
+      text-align: right;
+      letter-spacing: 0.02em;
+      word-break: break-all;
+      line-height: 1.15;
+    }
+
+    .history {
+      margin-top: 12px;
+      background: var(--history-bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 12px;
+    }
+
+    .history-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.82rem;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    .history-list {
+      display: grid;
+      gap: 6px;
+      min-height: 24px;
+      max-height: 96px;
+      overflow: auto;
+      scrollbar-width: thin;
+    }
+
+    .history-item {
+      font-size: 0.92rem;
+      color: #d8dde6;
+      padding: 6px 8px;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      overflow-wrap: anywhere;
+    }
+
+    .keys {
+      margin-top: 16px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+    }
+
+    button {
+      appearance: none;
+      border: 0;
+      border-radius: 16px;
+      color: var(--text);
+      font: inherit;
+      font-weight: 600;
+      min-height: 58px;
+      cursor: pointer;
+      transition: transform 0.08s ease, filter 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 8px 18px rgba(0, 0, 0, 0.24);
+      user-select: none;
+    }
+
+    button:hover {
+      filter: brightness(1.08);
+    }
+
+    button:active {
+      transform: translateY(1px) scale(0.99);
+    }
+
+    .digit, .decimal {
+      background: linear-gradient(180deg, var(--digit) 0%, #232833 100%);
+    }
+
+    .digit:hover, .decimal:hover {
+      background: linear-gradient(180deg, var(--digit-hover) 0%, #2f3642 100%);
+    }
+
+    .operator {
+      background: var(--operator);
+      color: #171208;
+    }
+
+    .operator:hover {
+      background: var(--operator-hover);
+    }
+
+    .equal {
+      background: var(--equal);
+    }
+
+    .equal:hover {
+      background: var(--equal-hover);
+    }
+
+    .clear {
+      background: linear-gradient(180deg, #3a2026 0%, #2c161b 100%);
+      color: #f7cbd1;
+    }
+
+    .clear:hover {
+      background: linear-gradient(180deg, var(--danger-hover) 0%, var(--danger) 100%);
+    }
+
+    .wide {
+      grid-column: span 2;
+    }
+
+    .span-2 {
+      grid-column: span 2;
+    }
+
+    @media (max-width: 420px) {
+      .calculator {
+        padding: 14px;
+        border-radius: 20px;
+      }
+
+      .keys {
+        gap: 8px;
+      }
+
+      button {
+        min-height: 54px;
+        border-radius: 14px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="calculator" aria-label="Calculator">
+    <div class="brand">
+      <span>Scratch-inspired</span>
+      <span class="badge">History On</span>
+    </div>
+
+    <section class="display" aria-live="polite">
+      <div id="expression" class="expression"></div>
+      <div id="result" class="result">0</div>
+    </section>
+
+    <section class="history" aria-label="計算履歴">
+      <div class="history-title">
+        <span>直近の計算</span>
+        <span id="historyCount">0件</span>
+      </div>
+      <div id="historyList" class="history-list"></div>
+    </section>
+
+    <section class="keys" aria-label="電卓キー">
+      <button class="clear" data-action="clear">C</button>
+      <button class="clear" data-action="backspace">⌫</button>
+      <button class="operator" data-action="operator" data-value="÷">÷</button>
+      <button class="operator" data-action="operator" data-value="×">×</button>
+
+      <button class="digit" data-action="digit" data-value="7">7</button>
+      <button class="digit" data-action="digit" data-value="8">8</button>
+      <button class="digit" data-action="digit" data-value="9">9</button>
+      <button class="operator" data-action="operator" data-value="+">+</button>
+
+      <button class="digit" data-action="digit" data-value="4">4</button>
+      <button class="digit" data-action="digit" data-value="5">5</button>
+      <button class="digit" data-action="digit" data-value="6">6</button>
+      <button class="operator" data-action="operator" data-value="−">−</button>
+
+      <button class="digit" data-action="digit" data-value="1">1</button>
+      <button class="digit" data-action="digit" data-value="2">2</button>
+      <button class="digit" data-action="digit" data-value="3">3</button>
+      <button class="decimal" data-action="decimal" data-value=".">.</button>
+
+      <button class="digit span-2" data-action="digit" data-value="0">0</button>
+      <button class="equal span-2" data-action="equals">=</button>
+    </section>
+  </main>
+
+  <script>
+    (() => {
+      const expressionEl = document.getElementById('expression');
+      const resultEl = document.getElementById('result');
+      const historyListEl = document.getElementById('historyList');
+      const historyCountEl = document.getElementById('historyCount');
+      const keys = document.querySelector('.keys');
+
+      const state = {
+        currentInput: '0',
+        firstOperand: null,
+        operator: null,
+        waitingForSecondOperand: false,
+        lastExpression: '',
+        history: []
+      };
+
+      function updateDisplay() {
+        if (state.lastExpression && state.firstOperand === null && state.operator === null && !state.waitingForSecondOperand) {
+          expressionEl.textContent = state.lastExpression;
+        } else {
+          const expressionParts = [];
+          if (state.firstOperand !== null) {
+            expressionParts.push(formatNumber(state.firstOperand));
+          }
+          if (state.operator) {
+            expressionParts.push(state.operator);
+          }
+          if (state.firstOperand === null && state.operator === null && state.currentInput !== '0') {
+            expressionParts.push(state.currentInput);
+          }
+          expressionEl.textContent = expressionParts.join(' ');
+        }
+        resultEl.textContent = state.currentInput;
+        renderHistory();
+      }
+
+      function formatNumber(value) {
+        if (value === null || value === undefined || value === '') return '0';
+        const num = Number(value);
+        if (Number.isFinite(num)) {
+          return String(num);
+        }
+        return String(value);
+      }
+
+      function appendDigit(digit) {
+        if (state.currentInput === 'Error') {
+          clearAll();
+        }
+        if (state.lastExpression && state.firstOperand === null && state.operator === null && !state.waitingForSecondOperand) {
+          state.lastExpression = '';
+          state.currentInput = '0';
+        }
+        if (state.waitingForSecondOperand) {
+          state.currentInput = digit;
+          state.waitingForSecondOperand = false;
+          resultEl.textContent = state.currentInput;
+          return;
+        }
+
+        if (state.currentInput === '0') {
+          state.currentInput = digit;
+        } else {
+          state.currentInput += digit;
+        }
+      }
+
+      function appendDecimal() {
+        if (state.currentInput === 'Error') {
+          clearAll();
+        }
+        if (state.lastExpression && state.firstOperand === null && state.operator === null && !state.waitingForSecondOperand) {
+          state.lastExpression = '';
+          state.currentInput = '0';
+        }
+        if (state.waitingForSecondOperand) {
+          state.currentInput = '0.';
+          state.waitingForSecondOperand = false;
+          return;
+        }
+        if (!state.currentInput.includes('.')) {
+          state.currentInput += '.';
+        }
+      }
+
+      function calculate(first, operator, second) {
+        const a = Number(first);
+        const b = Number(second);
+
+        if (!Number.isFinite(a) || !Number.isFinite(b)) {
+          return 0;
+        }
+
+        switch (operator) {
+          case '+':
+            return a + b;
+          case '−':
+            return a - b;
+          case '×':
+            return a * b;
+          case '÷':
+            return b === 0 ? 'Error' : a / b;
+          default:
+            return b;
+        }
+      }
+
+      function chooseOperator(nextOperator) {
+        if (state.currentInput === 'Error') {
+          return;
+        }
+        if (state.lastExpression && state.firstOperand === null && state.operator === null && !state.waitingForSecondOperand) {
+          state.lastExpression = '';
+        }
+        if (state.firstOperand === null) {
+          state.firstOperand = state.currentInput;
+        } else if (state.operator && !state.waitingForSecondOperand) {
+          const result = calculate(state.firstOperand, state.operator, state.currentInput);
+          if (result === 'Error') {
+            commitError();
+            return;
+          }
+          state.currentInput = trimResult(result);
+          state.firstOperand = state.currentInput;
+        }
+
+        state.operator = nextOperator;
+        state.waitingForSecondOperand = true;
+      }
+
+      function commitResult() {
+        if (state.firstOperand === null || !state.operator) {
+          return;
+        }
+
+        const expressionBefore = `${formatNumber(state.firstOperand)} ${state.operator} ${state.currentInput}`;
+        const result = calculate(state.firstOperand, state.operator, state.currentInput);
+
+        if (result === 'Error') {
+          commitError();
+          return;
+        }
+
+        const output = trimResult(result);
+        state.lastExpression = `${formatNumber(state.firstOperand)} ${state.operator} ${state.currentInput} = ${output}`;
+        state.currentInput = output;
+        state.history.unshift(`${expressionBefore} = ${output}`);
+        state.history = state.history.slice(0, 5);
+        state.firstOperand = null;
+        state.operator = null;
+        state.waitingForSecondOperand = false;
+      }
+
+      function commitError() {
+        state.currentInput = 'Error';
+        state.firstOperand = null;
+        state.operator = null;
+        state.waitingForSecondOperand = false;
+        state.lastExpression = '';
+      }
+
+      function trimResult(value) {
+        if (typeof value === 'string') {
+          return value;
+        }
+
+        const rounded = Number.parseFloat(Number(value).toFixed(10));
+        return String(rounded);
+      }
+
+      function clearAll() {
+        state.currentInput = '0';
+        state.firstOperand = null;
+        state.operator = null;
+        state.waitingForSecondOperand = false;
+        state.lastExpression = '';
+      }
+
+      function backspace() {
+        if (state.waitingForSecondOperand || state.currentInput === 'Error') {
+          return;
+        }
+        if (state.currentInput.length <= 1 || (state.currentInput.length === 2 && state.currentInput.startsWith('-'))) {
+          state.currentInput = '0';
+          return;
+        }
+        state.currentInput = state.currentInput.slice(0, -1);
+      }
+
+      function renderHistory() {
+        historyListEl.innerHTML = '';
+        if (state.history.length === 0) {
+          const empty = document.createElement('div');
+          empty.className = 'history-item';
+          empty.textContent = 'まだ計算履歴はありません';
+          historyListEl.appendChild(empty);
+          historyCountEl.textContent = '0件';
+          return;
+        }
+
+        state.history.forEach((item) => {
+          const row = document.createElement('div');
+          row.className = 'history-item';
+          row.textContent = item;
+          historyListEl.appendChild(row);
+        });
+
+        historyCountEl.textContent = `${state.history.length}件`;
+      }
+
+      keys.addEventListener('click', (event) => {
+        const button = event.target.closest('button');
+        if (!button) return;
+
+        const action = button.dataset.action;
+        const value = button.dataset.value;
+
+        switch (action) {
+          case 'digit':
+            appendDigit(value);
+            break;
+          case 'decimal':
+            appendDecimal();
+            break;
+          case 'operator':
+            chooseOperator(value);
+            break;
+          case 'equals':
+            commitResult();
+            break;
+          case 'clear':
+            clearAll();
+            break;
+          case 'backspace':
+            backspace();
+            break;
+        }
+
+        updateDisplay();
+      });
+
+      document.addEventListener('keydown', (event) => {
+        const { key } = event;
+        if (/^\d$/.test(key)) {
+          appendDigit(key);
+        } else if (key === '.') {
+          appendDecimal();
+        } else if (['+', '-', '*', '/'].includes(key)) {
+          const map = { '+': '+', '-': '−', '*': '×', '/': '÷' };
+          chooseOperator(map[key]);
+        } else if (key === 'Enter' || key === '=') {
+          event.preventDefault();
+          commitResult();
+        } else if (key === 'Escape') {
+          clearAll();
+        } else if (key === 'Backspace') {
+          backspace();
+        } else {
+          return;
+        }
+        updateDisplay();
+      });
+
+      updateDisplay();
+    })();
+  </script>
+</body>
+</html>
