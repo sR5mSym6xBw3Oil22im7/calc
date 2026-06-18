@@ -6,23 +6,28 @@
   <title>Calculator</title>
   <style>
     :root {
-      --bg: #0f1115;
-      --bg-soft: #171a21;
-      --panel: #1d212a;
-      --panel-2: #242936;
+      --page-bg-1: #0f1115;
+      --page-bg-2: #171b22;
+      --page-glow-1: rgba(55, 167, 255, 0.12);
+      --page-glow-2: rgba(232, 177, 90, 0.09);
+      --panel: rgba(29, 33, 42, 0.96);
+      --panel-2: rgba(20, 23, 30, 0.96);
+      --display-bg: linear-gradient(180deg, rgba(10, 12, 16, 0.9), rgba(22, 25, 32, 0.96));
       --text: #f2f4f8;
       --muted: #9ca3af;
       --border: rgba(255, 255, 255, 0.08);
       --shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
-      --digit: #2b303c;
-      --digit-hover: #353c4a;
+      --digit: linear-gradient(180deg, #2b303c 0%, #232833 100%);
+      --digit-hover: linear-gradient(180deg, #353c4a 0%, #2f3642 100%);
       --operator: linear-gradient(180deg, #e8b15a 0%, #d8892b 100%);
       --operator-hover: linear-gradient(180deg, #f2be76 0%, #e1973b 100%);
+      --operator-text: #171208;
       --equal: linear-gradient(180deg, #37a7ff 0%, #1778ff 100%);
       --equal-hover: linear-gradient(180deg, #55b4ff 0%, #2c8cff 100%);
-      --danger: #4a1f24;
-      --danger-hover: #5c262d;
-      --history-bg: rgba(255, 255, 255, 0.03);
+      --equal-text: #ffffff;
+      --utility: linear-gradient(180deg, #414b5f 0%, #2a3342 100%);
+      --utility-hover: linear-gradient(180deg, #4f5b72 0%, #354051 100%);
+      --utility-text: #e7edf7;
     }
 
     * {
@@ -38,22 +43,97 @@
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       color: var(--text);
       background:
-        radial-gradient(circle at top, rgba(55, 167, 255, 0.12), transparent 30%),
-        radial-gradient(circle at bottom right, rgba(232, 177, 90, 0.09), transparent 25%),
-        linear-gradient(180deg, #0c0e12 0%, #11141a 100%);
+        radial-gradient(circle at top, var(--page-glow-1), transparent 30%),
+        radial-gradient(circle at bottom right, var(--page-glow-2), transparent 25%),
+        linear-gradient(180deg, var(--page-bg-1) 0%, var(--page-bg-2) 100%);
       display: grid;
       place-items: center;
       padding: 20px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .meteor-layer {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      overflow: hidden;
+      z-index: 0;
+      opacity: 0;
+      transition: opacity 0.35s ease;
+    }
+
+    .meteor-active .meteor-layer {
+      opacity: 1;
+    }
+
+    .meteor {
+      position: absolute;
+      top: var(--top, 20%);
+      left: var(--left, 110%);
+      width: var(--len, 220px);
+      height: 4px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, rgba(255, 255, 255, 0.96) 0%, rgba(255, 255, 255, 0.62) 8%, rgba(255, 255, 255, 0.22) 30%, rgba(255, 255, 255, 0.08) 65%, rgba(255, 255, 255, 0.02) 100%);
+      filter: drop-shadow(0 0 12px var(--meteor-glow, rgba(255,255,255,0.6)));
+      transform: rotate(var(--angle, -25deg)) translate3d(0, 0, 0);
+      animation: meteor-fall var(--dur, 4.2s) linear infinite;
+      animation-delay: var(--delay, 0s);
+      opacity: 0;
+    }
+
+    .meteor::before {
+      content: "";
+      position: absolute;
+      right: -1px;
+      top: 50%;
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--meteor-glow, rgba(255,255,255,0.95));
+      transform: translateY(-50%);
+      box-shadow: 0 0 10px var(--meteor-glow, rgba(255,255,255,0.85));
+    }
+
+    .meteor::after {
+      content: "";
+      position: absolute;
+      inset: -5px auto -5px 0;
+      width: calc(100% - 8px);
+      height: 14px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, rgba(255,255,255,0.58) 0%, rgba(255,255,255,0.14) 65%, rgba(255,255,255,0) 100%);
+      opacity: 0.8;
+      filter: blur(2px);
+    }
+
+    @keyframes meteor-fall {
+      0% {
+        transform: translate3d(0, 0, 0) rotate(var(--angle, -25deg));
+        opacity: 0;
+      }
+      8% {
+        opacity: 1;
+      }
+      30% {
+        opacity: 1;
+      }
+      100% {
+        transform: translate3d(-210vw, 150vh, 0) rotate(var(--angle, -25deg));
+        opacity: 0;
+      }
     }
 
     .calculator {
       width: min(100%, 360px);
-      background: linear-gradient(180deg, rgba(29, 33, 42, 0.96), rgba(20, 23, 30, 0.96));
+      background: linear-gradient(180deg, var(--panel), var(--panel-2));
       border: 1px solid var(--border);
       border-radius: 24px;
       box-shadow: var(--shadow);
       padding: 18px;
       backdrop-filter: blur(10px);
+      position: relative;
+      z-index: 1;
     }
 
     .brand {
@@ -67,15 +147,50 @@
       text-transform: uppercase;
     }
 
-    .badge {
-      padding: 6px 10px;
+    .theme-select {
+      appearance: none;
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      padding: 7px 34px 7px 12px;
       border-radius: 999px;
-      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border);
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.04));
+      color: var(--text);
+      font: inherit;
+      font-size: 0.82rem;
+      letter-spacing: 0.04em;
+      cursor: pointer;
+      box-shadow: none;
+      min-height: 0;
+      text-transform: uppercase;
+      outline: none;
+      background-image:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.04)),
+        linear-gradient(45deg, transparent 50%, currentColor 50%),
+        linear-gradient(135deg, currentColor 50%, transparent 50%);
+      background-position:
+        0 0,
+        calc(100% - 18px) 50%,
+        calc(100% - 12px) 50%;
+      background-size:
+        auto,
+        6px 6px,
+        6px 6px;
+      background-repeat: no-repeat;
+    }
+
+    .theme-select:hover {
+      filter: brightness(1.06);
+    }
+
+    .theme-select option {
+      color: #111827;
       border: 1px solid var(--border);
     }
 
     .display {
-      background: linear-gradient(180deg, rgba(10, 12, 16, 0.9), rgba(22, 25, 32, 0.96));
+      background: var(--display-bg);
       border: 1px solid var(--border);
       border-radius: 18px;
       padding: 16px;
@@ -101,42 +216,6 @@
       letter-spacing: 0.02em;
       word-break: break-all;
       line-height: 1.15;
-    }
-
-    .history {
-      margin-top: 12px;
-      background: var(--history-bg);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 12px;
-    }
-
-    .history-title {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-size: 0.82rem;
-      color: var(--muted);
-      margin-bottom: 8px;
-    }
-
-    .history-list {
-      display: grid;
-      gap: 6px;
-      min-height: 24px;
-      max-height: 96px;
-      overflow: auto;
-      scrollbar-width: thin;
-    }
-
-    .history-item {
-      font-size: 0.92rem;
-      color: #d8dde6;
-      padding: 6px 8px;
-      border-radius: 10px;
-      background: rgba(255, 255, 255, 0.04);
-      border: 1px solid rgba(255, 255, 255, 0.05);
-      overflow-wrap: anywhere;
     }
 
     .keys {
@@ -169,16 +248,16 @@
     }
 
     .digit, .decimal {
-      background: linear-gradient(180deg, var(--digit) 0%, #232833 100%);
+      background: var(--digit);
     }
 
     .digit:hover, .decimal:hover {
-      background: linear-gradient(180deg, var(--digit-hover) 0%, #2f3642 100%);
+      background: var(--digit-hover);
     }
 
     .operator {
       background: var(--operator);
-      color: #171208;
+      color: var(--operator-text);
     }
 
     .operator:hover {
@@ -187,6 +266,7 @@
 
     .equal {
       background: var(--equal);
+      color: var(--equal-text);
     }
 
     .equal:hover {
@@ -194,12 +274,21 @@
     }
 
     .clear {
-      background: linear-gradient(180deg, #3a2026 0%, #2c161b 100%);
-      color: #f7cbd1;
+      background: var(--operator);
+      color: var(--operator-text);
     }
 
     .clear:hover {
-      background: linear-gradient(180deg, var(--danger-hover) 0%, var(--danger) 100%);
+      background: var(--operator-hover);
+    }
+
+    .backspace {
+      background: var(--operator);
+      color: var(--operator-text);
+    }
+
+    .backspace:hover {
+      background: var(--operator-hover);
     }
 
     .wide {
@@ -228,10 +317,22 @@
   </style>
 </head>
 <body>
+  <div id="meteorLayer" class="meteor-layer" aria-hidden="true"></div>
   <main class="calculator" aria-label="Calculator">
     <div class="brand">
       <span>Scratch-inspired</span>
-      <span class="badge">History On</span>
+      <select id="themeSelect" class="theme-select" aria-label="テーマを選択">
+        <option value="0">No.1 Stylish</option>
+        <option value="1">No.2 Minimal</option>
+        <option value="2">No.3 Future</option>
+        <option value="3">No.4 Cafe</option>
+        <option value="4">No.5 Pop</option>
+        <option value="5">No.6 Cool</option>
+        <option value="6">No.7 Luxury</option>
+        <option value="7">No.8 Natural</option>
+        <option value="8">No.9 Gaming</option>
+        <option value="9">No.10 Modern</option>
+      </select>
     </div>
 
     <section class="display" aria-live="polite">
@@ -239,17 +340,9 @@
       <div id="result" class="result">0</div>
     </section>
 
-    <section class="history" aria-label="計算履歴">
-      <div class="history-title">
-        <span>直近の計算</span>
-        <span id="historyCount">0件</span>
-      </div>
-      <div id="historyList" class="history-list"></div>
-    </section>
-
     <section class="keys" aria-label="電卓キー">
       <button class="clear" data-action="clear">C</button>
-      <button class="clear" data-action="backspace">⌫</button>
+      <button class="backspace" data-action="backspace">⌫</button>
       <button class="operator" data-action="operator" data-value="÷">÷</button>
       <button class="operator" data-action="operator" data-value="×">×</button>
 
@@ -277,17 +370,347 @@
     (() => {
       const expressionEl = document.getElementById('expression');
       const resultEl = document.getElementById('result');
-      const historyListEl = document.getElementById('historyList');
-      const historyCountEl = document.getElementById('historyCount');
       const keys = document.querySelector('.keys');
+      const themeSelectEl = document.getElementById('themeSelect');
+      const meteorLayerEl = document.getElementById('meteorLayer');
+
+      function renderMeteors(theme) {
+        meteorLayerEl.textContent = '';
+        document.body.classList.toggle('meteor-active', Boolean(theme.meteor));
+        if (!theme.meteor) {
+          return;
+        }
+
+        const count = theme.meteorCount || 5;
+        for (let index = 0; index < count; index += 1) {
+          const meteor = document.createElement('span');
+          meteor.className = 'meteor';
+          meteor.style.setProperty('--top', `${Math.random() * 100}%`);
+          meteor.style.setProperty('--left', `${-20 + Math.random() * 140}%`);
+          meteor.style.setProperty('--len', `${160 + Math.random() * 220}px`);
+          meteor.style.setProperty('--dur', `${2.1 + Math.random() * 2.8}s`);
+          meteor.style.setProperty('--delay', `${Math.random() * 3.8}s`);
+          meteor.style.setProperty('--angle', `${-12 - Math.random() * 28}deg`);
+          meteor.style.setProperty('--meteor-glow', theme.meteorGlow || 'rgba(255,255,255,0.85)');
+          meteorLayerEl.appendChild(meteor);
+        }
+      }
+
+      const themes = [
+        {
+          name: 'No.1 Stylish',
+          pageBg1: '#0f1115',
+          pageBg2: '#171b22',
+          pageGlow1: 'rgba(55, 167, 255, 0.12)',
+          pageGlow2: 'rgba(232, 177, 90, 0.09)',
+          panel: 'rgba(29, 33, 42, 0.96)',
+          panel2: 'rgba(20, 23, 30, 0.96)',
+          displayBg: 'linear-gradient(180deg, rgba(10, 12, 16, 0.9), rgba(22, 25, 32, 0.96))',
+          text: '#f2f4f8',
+          muted: '#9ca3af',
+          border: 'rgba(255, 255, 255, 0.08)',
+          shadow: '0 20px 50px rgba(0, 0, 0, 0.45)',
+          digit: 'linear-gradient(180deg, #2b303c 0%, #232833 100%)',
+          digitHover: 'linear-gradient(180deg, #353c4a 0%, #2f3642 100%)',
+          operator: 'linear-gradient(180deg, #e8b15a 0%, #d8892b 100%)',
+          operatorHover: 'linear-gradient(180deg, #f2be76 0%, #e1973b 100%)',
+          operatorText: '#171208',
+          equal: 'linear-gradient(180deg, #37a7ff 0%, #1778ff 100%)',
+          equalHover: 'linear-gradient(180deg, #55b4ff 0%, #2c8cff 100%)',
+          equalText: '#ffffff',
+          historyBg: 'rgba(255, 255, 255, 0.03)',
+          historyItemBg: 'rgba(255, 255, 255, 0.04)',
+          historyItemBorder: 'rgba(255, 255, 255, 0.05)',
+          meteor: true,
+          meteorGlow: 'rgba(127, 198, 255, 0.95)',
+          meteorCount: 14
+        },
+        {
+          name: 'No.2 Minimal',
+          pageBg1: '#f8f8f6',
+          pageBg2: '#e7e7e4',
+          pageGlow1: 'rgba(95, 110, 140, 0.12)',
+          pageGlow2: 'rgba(74, 160, 120, 0.08)',
+          panel: 'rgba(255, 255, 255, 0.95)',
+          panel2: 'rgba(243, 244, 246, 0.98)',
+          displayBg: 'linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(242, 243, 246, 0.98))',
+          text: '#1f2937',
+          muted: '#667085',
+          border: 'rgba(31, 41, 55, 0.1)',
+          shadow: '0 18px 44px rgba(31, 41, 55, 0.14)',
+          digit: 'linear-gradient(180deg, #f3f4f6 0%, #e5e7eb 100%)',
+          digitHover: 'linear-gradient(180deg, #e8eaef 0%, #dbe0e8 100%)',
+          operator: 'linear-gradient(180deg, #20345b 0%, #13213f 100%)',
+          operatorHover: 'linear-gradient(180deg, #2d4a7f 0%, #1d335d 100%)',
+          operatorText: '#f8fafc',
+          equal: 'linear-gradient(180deg, #31b67a 0%, #18885a 100%)',
+          equalHover: 'linear-gradient(180deg, #49c58a 0%, #229a67 100%)',
+          equalText: '#ffffff',
+          historyBg: 'rgba(17, 24, 39, 0.04)',
+          historyItemBg: 'rgba(255, 255, 255, 0.8)',
+          historyItemBorder: 'rgba(31, 41, 55, 0.08)',
+          meteor: false
+        },
+        {
+          name: 'No.3 Future',
+          pageBg1: '#060816',
+          pageBg2: '#10172a',
+          pageGlow1: 'rgba(0, 229, 255, 0.12)',
+          pageGlow2: 'rgba(168, 85, 247, 0.1)',
+          panel: 'rgba(10, 15, 28, 0.96)',
+          panel2: 'rgba(17, 24, 39, 0.96)',
+          displayBg: 'linear-gradient(180deg, rgba(5, 9, 20, 0.94), rgba(13, 19, 34, 0.98))',
+          text: '#e5f4ff',
+          muted: '#8ea3b8',
+          border: 'rgba(125, 211, 252, 0.16)',
+          shadow: '0 24px 56px rgba(0, 0, 0, 0.5)',
+          digit: 'linear-gradient(180deg, #172033 0%, #111827 100%)',
+          digitHover: 'linear-gradient(180deg, #22304b 0%, #162233 100%)',
+          operator: 'linear-gradient(180deg, #22d3ee 0%, #0891b2 100%)',
+          operatorHover: 'linear-gradient(180deg, #67e8f9 0%, #0e7490 100%)',
+          operatorText: '#03111c',
+          equal: 'linear-gradient(180deg, #a855f7 0%, #7c3aed 100%)',
+          equalHover: 'linear-gradient(180deg, #c084fc 0%, #8b5cf6 100%)',
+          equalText: '#ffffff',
+          historyBg: 'rgba(255, 255, 255, 0.03)',
+          historyItemBg: 'rgba(255, 255, 255, 0.04)',
+          historyItemBorder: 'rgba(125, 211, 252, 0.12)',
+          meteor: true,
+          meteorGlow: 'rgba(0, 255, 255, 0.95)',
+          meteorCount: 16
+        },
+        {
+          name: 'No.4 Cafe',
+          pageBg1: '#f6ede1',
+          pageBg2: '#dbc7aa',
+          pageGlow1: 'rgba(196, 137, 94, 0.14)',
+          pageGlow2: 'rgba(62, 104, 72, 0.1)',
+          panel: 'rgba(250, 240, 226, 0.96)',
+          panel2: 'rgba(238, 224, 205, 0.98)',
+          displayBg: 'linear-gradient(180deg, rgba(255, 248, 239, 0.98), rgba(244, 230, 208, 0.98))',
+          text: '#3f2f23',
+          muted: '#7b6656',
+          border: 'rgba(112, 82, 58, 0.12)',
+          shadow: '0 20px 46px rgba(112, 82, 58, 0.18)',
+          digit: 'linear-gradient(180deg, #e8dccd 0%, #d9c5ad 100%)',
+          digitHover: 'linear-gradient(180deg, #dcc9b0 0%, #ccb595 100%)',
+          operator: 'linear-gradient(180deg, #c98a58 0%, #a96b38 100%)',
+          operatorHover: 'linear-gradient(180deg, #d9a06f 0%, #ba7c47 100%)',
+          operatorText: '#fff8f0',
+          equal: 'linear-gradient(180deg, #2f6d45 0%, #1f4f34 100%)',
+          equalHover: 'linear-gradient(180deg, #3a8252 0%, #286143 100%)',
+          equalText: '#ffffff',
+          historyBg: 'rgba(255, 255, 255, 0.36)',
+          historyItemBg: 'rgba(255, 250, 244, 0.9)',
+          historyItemBorder: 'rgba(112, 82, 58, 0.1)',
+          meteor: false
+        },
+        {
+          name: 'No.5 Pop',
+          pageBg1: '#fdfcff',
+          pageBg2: '#f1f3ff',
+          pageGlow1: 'rgba(255, 179, 71, 0.12)',
+          pageGlow2: 'rgba(255, 105, 180, 0.1)',
+          panel: 'rgba(255, 255, 255, 0.96)',
+          panel2: 'rgba(245, 246, 255, 0.98)',
+          displayBg: 'linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 248, 255, 0.98))',
+          text: '#2b2436',
+          muted: '#786b89',
+          border: 'rgba(130, 117, 152, 0.12)',
+          shadow: '0 18px 42px rgba(130, 117, 152, 0.16)',
+          digit: 'linear-gradient(180deg, #f2eefe 0%, #e8e2ff 100%)',
+          digitHover: 'linear-gradient(180deg, #e8e2ff 0%, #ddd6fe 100%)',
+          operator: 'linear-gradient(180deg, #ffb870 0%, #ff8f4a 100%)',
+          operatorHover: 'linear-gradient(180deg, #ffc78f 0%, #ff9e61 100%)',
+          operatorText: '#2d1a08',
+          equal: 'linear-gradient(180deg, #ff6fa8 0%, #f43f8a 100%)',
+          equalHover: 'linear-gradient(180deg, #ff8abc 0%, #ff5f9e 100%)',
+          equalText: '#ffffff',
+          historyBg: 'rgba(124, 58, 237, 0.05)',
+          historyItemBg: 'rgba(255, 255, 255, 0.92)',
+          historyItemBorder: 'rgba(130, 117, 152, 0.1)',
+          meteor: false
+        },
+        {
+          name: 'No.6 Cool',
+          pageBg1: '#edf4f8',
+          pageBg2: '#cfd9e3',
+          pageGlow1: 'rgba(56, 189, 248, 0.14)',
+          pageGlow2: 'rgba(34, 197, 94, 0.08)',
+          panel: 'rgba(246, 250, 252, 0.96)',
+          panel2: 'rgba(228, 236, 243, 0.98)',
+          displayBg: 'linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(240, 246, 250, 0.98))',
+          text: '#22303c',
+          muted: '#657684',
+          border: 'rgba(76, 99, 120, 0.12)',
+          shadow: '0 18px 42px rgba(52, 68, 82, 0.16)',
+          digit: 'linear-gradient(180deg, #e7eef4 0%, #d5e1ea 100%)',
+          digitHover: 'linear-gradient(180deg, #dce6ef 0%, #c7d5e1 100%)',
+          operator: 'linear-gradient(180deg, #7cc6ff 0%, #4aa7ea 100%)',
+          operatorHover: 'linear-gradient(180deg, #98d4ff 0%, #61b6f0 100%)',
+          operatorText: '#0d2230',
+          equal: 'linear-gradient(180deg, #a6e22e 0%, #77c918 100%)',
+          equalHover: 'linear-gradient(180deg, #b9ef4f 0%, #8ad320 100%)',
+          equalText: '#13210a',
+          historyBg: 'rgba(255, 255, 255, 0.42)',
+          historyItemBg: 'rgba(255, 255, 255, 0.92)',
+          historyItemBorder: 'rgba(76, 99, 120, 0.08)',
+          meteor: false
+        },
+        {
+          name: 'No.7 Luxury',
+          pageBg1: '#2b0f17',
+          pageBg2: '#12070c',
+          pageGlow1: 'rgba(245, 158, 11, 0.12)',
+          pageGlow2: 'rgba(244, 63, 94, 0.1)',
+          panel: 'rgba(44, 19, 27, 0.96)',
+          panel2: 'rgba(21, 10, 16, 0.98)',
+          displayBg: 'linear-gradient(180deg, rgba(59, 25, 35, 0.96), rgba(28, 13, 19, 0.98))',
+          text: '#fff2f4',
+          muted: '#c5aab0',
+          border: 'rgba(245, 158, 11, 0.12)',
+          shadow: '0 24px 56px rgba(0, 0, 0, 0.48)',
+          digit: 'linear-gradient(180deg, #4a2a32 0%, #331b21 100%)',
+          digitHover: 'linear-gradient(180deg, #5e3440 0%, #42232a 100%)',
+          operator: 'linear-gradient(180deg, #f4d27a 0%, #c9a24c 100%)',
+          operatorHover: 'linear-gradient(180deg, #fde08c 0%, #d4b15d 100%)',
+          operatorText: '#2c1b05',
+          equal: 'linear-gradient(180deg, #d9465f 0%, #a61d3a 100%)',
+          equalHover: 'linear-gradient(180deg, #f05f78 0%, #b92947 100%)',
+          equalText: '#fff7f8',
+          historyBg: 'rgba(255, 255, 255, 0.04)',
+          historyItemBg: 'rgba(255, 255, 255, 0.05)',
+          historyItemBorder: 'rgba(245, 158, 11, 0.12)',
+          meteor: false
+        },
+        {
+          name: 'No.8 Natural',
+          pageBg1: '#f6f1e8',
+          pageBg2: '#e4d7c3',
+          pageGlow1: 'rgba(132, 145, 96, 0.12)',
+          pageGlow2: 'rgba(188, 108, 61, 0.08)',
+          panel: 'rgba(251, 246, 237, 0.96)',
+          panel2: 'rgba(239, 231, 218, 0.98)',
+          displayBg: 'linear-gradient(180deg, rgba(255, 251, 245, 0.98), rgba(245, 238, 227, 0.98))',
+          text: '#3e3427',
+          muted: '#7c6e60',
+          border: 'rgba(126, 103, 77, 0.12)',
+          shadow: '0 20px 46px rgba(126, 103, 77, 0.16)',
+          digit: 'linear-gradient(180deg, #efe7da 0%, #ddd2bf 100%)',
+          digitHover: 'linear-gradient(180deg, #e4dac9 0%, #d0c1aa 100%)',
+          operator: 'linear-gradient(180deg, #7d8b53 0%, #5f6d3a 100%)',
+          operatorHover: 'linear-gradient(180deg, #91a365 0%, #728147 100%)',
+          operatorText: '#f9f6ef',
+          equal: 'linear-gradient(180deg, #c8794f 0%, #a85a32 100%)',
+          equalHover: 'linear-gradient(180deg, #da8b60 0%, #ba6a40 100%)',
+          equalText: '#fff8f1',
+          historyBg: 'rgba(255, 255, 255, 0.42)',
+          historyItemBg: 'rgba(255, 252, 247, 0.94)',
+          historyItemBorder: 'rgba(126, 103, 77, 0.1)',
+          meteor: false
+        },
+        {
+          name: 'No.9 Gaming',
+          pageBg1: '#050608',
+          pageBg2: '#0d1217',
+          pageGlow1: 'rgba(34, 197, 94, 0.16)',
+          pageGlow2: 'rgba(236, 72, 153, 0.12)',
+          panel: 'rgba(12, 15, 18, 0.96)',
+          panel2: 'rgba(17, 21, 26, 0.98)',
+          displayBg: 'linear-gradient(180deg, rgba(7, 10, 14, 0.96), rgba(15, 18, 24, 0.98))',
+          text: '#e7f7ea',
+          muted: '#96a6a0',
+          border: 'rgba(34, 197, 94, 0.14)',
+          shadow: '0 24px 58px rgba(0, 0, 0, 0.5)',
+          digit: 'linear-gradient(180deg, #161b21 0%, #0e1217 100%)',
+          digitHover: 'linear-gradient(180deg, #232a33 0%, #151b22 100%)',
+          operator: 'linear-gradient(180deg, #00e676 0%, #00b85a 100%)',
+          operatorHover: 'linear-gradient(180deg, #2af08a 0%, #18c66a 100%)',
+          operatorText: '#04110a',
+          equal: 'linear-gradient(180deg, #ff4fd8 0%, #d61cff 100%)',
+          equalHover: 'linear-gradient(180deg, #ff78e0 0%, #e24dff 100%)',
+          equalText: '#fff7ff',
+          historyBg: 'rgba(255, 255, 255, 0.03)',
+          historyItemBg: 'rgba(255, 255, 255, 0.04)',
+          historyItemBorder: 'rgba(34, 197, 94, 0.12)',
+          meteor: true,
+          meteorGlow: 'rgba(57, 255, 20, 0.95)',
+          meteorCount: 18
+        },
+        {
+          name: 'No.10 Modern',
+          pageBg1: '#1a1c1f',
+          pageBg2: '#ece8df',
+          pageGlow1: 'rgba(120, 119, 198, 0.12)',
+          pageGlow2: 'rgba(251, 191, 36, 0.1)',
+          panel: 'rgba(245, 242, 236, 0.96)',
+          panel2: 'rgba(228, 223, 214, 0.98)',
+          displayBg: 'linear-gradient(180deg, rgba(251, 248, 241, 0.98), rgba(238, 233, 225, 0.98))',
+          text: '#2d3138',
+          muted: '#6d6b67',
+          border: 'rgba(77, 76, 72, 0.12)',
+          shadow: '0 18px 42px rgba(34, 34, 34, 0.16)',
+          digit: 'linear-gradient(180deg, #e9e5dd 0%, #d8d1c5 100%)',
+          digitHover: 'linear-gradient(180deg, #ddd7ca 0%, #ccc3b4 100%)',
+          operator: 'linear-gradient(180deg, #8a6fa8 0%, #654d84 100%)',
+          operatorHover: 'linear-gradient(180deg, #9b83ba 0%, #765c95 100%)',
+          operatorText: '#fffafc',
+          equal: 'linear-gradient(180deg, #3b82f6 0%, #1d4ed8 100%)',
+          equalHover: 'linear-gradient(180deg, #5b94fb 0%, #305fe0 100%)',
+          equalText: '#ffffff',
+          historyBg: 'rgba(255, 255, 255, 0.42)',
+          historyItemBg: 'rgba(255, 251, 244, 0.94)',
+          historyItemBorder: 'rgba(77, 76, 72, 0.1)',
+          meteor: false
+        }
+      ];
+
+      function applyTheme(theme, themeIndex) {
+        const rootStyle = document.documentElement.style;
+        rootStyle.setProperty('--page-bg-1', theme.pageBg1);
+        rootStyle.setProperty('--page-bg-2', theme.pageBg2);
+        rootStyle.setProperty('--page-glow-1', theme.pageGlow1);
+        rootStyle.setProperty('--page-glow-2', theme.pageGlow2);
+        rootStyle.setProperty('--panel', theme.panel);
+        rootStyle.setProperty('--panel-2', theme.panel2);
+        rootStyle.setProperty('--display-bg', theme.displayBg);
+        rootStyle.setProperty('--text', theme.text);
+        rootStyle.setProperty('--muted', theme.muted);
+        rootStyle.setProperty('--border', theme.border);
+        rootStyle.setProperty('--shadow', theme.shadow);
+        rootStyle.setProperty('--digit', theme.digit);
+        rootStyle.setProperty('--digit-hover', theme.digitHover);
+        rootStyle.setProperty('--operator', theme.operator);
+        rootStyle.setProperty('--operator-hover', theme.operatorHover);
+        rootStyle.setProperty('--operator-text', theme.operatorText);
+        rootStyle.setProperty('--equal', theme.equal);
+        rootStyle.setProperty('--equal-hover', theme.equalHover);
+        rootStyle.setProperty('--equal-text', theme.equalText);
+        rootStyle.setProperty('--history-bg', theme.historyBg);
+        rootStyle.setProperty('--history-item-bg', theme.historyItemBg);
+        rootStyle.setProperty('--history-item-border', theme.historyItemBorder);
+        rootStyle.setProperty('--meteor-glow', theme.meteorGlow || 'rgba(255,255,255,0.85)');
+        themeSelectEl.value = String(themeIndex);
+        renderMeteors(theme);
+      }
+
+      function applyThemeByIndex(index) {
+        const safeIndex = ((index % themes.length) + themes.length) % themes.length;
+        applyTheme(themes[safeIndex], safeIndex);
+      }
+
+      applyThemeByIndex(Math.floor(Math.random() * themes.length));
+
+      themeSelectEl.addEventListener('change', () => {
+        applyThemeByIndex(Number(themeSelectEl.value));
+      });
 
       const state = {
         currentInput: '0',
         firstOperand: null,
         operator: null,
         waitingForSecondOperand: false,
-        lastExpression: '',
-        history: []
+        lastExpression: ''
       };
 
       function updateDisplay() {
@@ -307,7 +730,6 @@
           expressionEl.textContent = expressionParts.join(' ');
         }
         resultEl.textContent = state.currentInput;
-        renderHistory();
       }
 
       function formatNumber(value) {
@@ -420,8 +842,6 @@
         const output = trimResult(result);
         state.lastExpression = `${formatNumber(state.firstOperand)} ${state.operator} ${state.currentInput} = ${output}`;
         state.currentInput = output;
-        state.history.unshift(`${expressionBefore} = ${output}`);
-        state.history = state.history.slice(0, 5);
         state.firstOperand = null;
         state.operator = null;
         state.waitingForSecondOperand = false;
@@ -461,27 +881,6 @@
           return;
         }
         state.currentInput = state.currentInput.slice(0, -1);
-      }
-
-      function renderHistory() {
-        historyListEl.innerHTML = '';
-        if (state.history.length === 0) {
-          const empty = document.createElement('div');
-          empty.className = 'history-item';
-          empty.textContent = 'まだ計算履歴はありません';
-          historyListEl.appendChild(empty);
-          historyCountEl.textContent = '0件';
-          return;
-        }
-
-        state.history.forEach((item) => {
-          const row = document.createElement('div');
-          row.className = 'history-item';
-          row.textContent = item;
-          historyListEl.appendChild(row);
-        });
-
-        historyCountEl.textContent = `${state.history.length}件`;
       }
 
       keys.addEventListener('click', (event) => {
@@ -527,10 +926,13 @@
         } else if (key === 'Enter' || key === '=') {
           event.preventDefault();
           commitResult();
-        } else if (key === 'Escape') {
+        } else if (key === 'c' || key === 'C') {
           clearAll();
         } else if (key === 'Backspace') {
+          event.preventDefault();
           backspace();
+        } else if (key === 'Escape') {
+          clearAll();
         } else {
           return;
         }
