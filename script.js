@@ -1,575 +1,759 @@
-    (() => {
-      const expressionEl = document.getElementById('expression');
-      const resultEl = document.getElementById('result');
-      const keys = document.querySelector('.keys');
-      const themeSelectEl = document.getElementById('themeSelect');
-      const meteorLayerEl = document.getElementById('meteorLayer');
+(() => {
+  'use strict';
 
-      function renderMeteors(theme) {
-        meteorLayerEl.textContent = '';
-        document.body.classList.toggle('meteor-active', Boolean(theme.meteor));
-        if (!theme.meteor) {
-          return;
-        }
+  const mainDisplay = document.getElementById('mainDisplay');
+  const expressionDisplay = document.getElementById('expressionDisplay');
+  const meterBar = document.getElementById('displayMeterBar');
+  const keypad = document.getElementById('keypad');
+  const calculator = document.getElementById('calculator');
+  const flashLayer = document.getElementById('flashLayer');
+  const toast = document.getElementById('toast');
+  const particleCanvas = document.getElementById('particleCanvas');
+  const particleContext = particleCanvas.getContext('2d');
+  const fireworksCanvas = document.getElementById('fireworksCanvas');
+  const fireworksContext = fireworksCanvas.getContext('2d');
 
-        const count = theme.meteorCount || 5;
-        for (let index = 0; index < count; index += 1) {
-          const meteor = document.createElement('span');
-          meteor.className = 'meteor';
-          meteor.style.setProperty('--top', `${Math.random() * 100}%`);
-          meteor.style.setProperty('--left', `${-20 + Math.random() * 140}%`);
-          meteor.style.setProperty('--len', `${160 + Math.random() * 220}px`);
-          meteor.style.setProperty('--dur', `${2.1 + Math.random() * 2.8}s`);
-          meteor.style.setProperty('--delay', `${Math.random() * 3.8}s`);
-          meteor.style.setProperty('--angle', `${-12 - Math.random() * 28}deg`);
-          meteor.style.setProperty('--meteor-glow', theme.meteorGlow || 'rgba(255,255,255,0.85)');
-          meteorLayerEl.appendChild(meteor);
-        }
+  let currentValue = '0';
+  let expressionText = '';
+  let previousValue = null;
+  let operator = null;
+  let waitingForOperand = false;
+  let toastTimer = null;
+  let currentTheme = null;
+  let particleCanvasRatio = 1;
+  let fireworksCanvasRatio = 1;
+  let fireworksLaunchedCount = 0;
+  let fireworksTargetCount = 0;
+  let nextFireworkTime = 0;
+  let fireworksAnimationId = null;
+  let lastFireworksFrame = 0;
+
+  const FIREWORK_FRAME_INTERVAL = 1000 / 30;
+  const FIREWORK_LAUNCH_COUNT = 5; // Equal button: launch exactly five fireworks
+  const FIREWORK_LAUNCH_INTERVAL = 1000; // One-second interval between launches
+  const FIREWORK_LAUNCH_ANGLES = [90, 45, 135];
+  const FIREWORK_EXPLOSION_SCALE = 3;
+  const MAX_FIREWORK_ROCKETS = 4;
+  const MAX_FIREWORK_SPARKS = 420;
+
+  const flowerTypes = [
+    'sakura',
+    'rose',
+    'chrysanthemum',
+    'lily',
+    'lotus',
+    'sunflower'
+  ];
+
+  const particles = [];
+  const ambientParticles = [];
+  const fireworkRockets = [];
+  const fireworkSparks = [];
+
+  const themes = [
+    'rainbow',
+    'plasma',
+    'gold',
+    'lime',
+    'sakura',
+    'ocean',
+    'inferno',
+    'ice',
+    'candy',
+    'royal'
+  ];
+
+  function resizeCanvas(canvas, context, ratio) {
+    canvas.width = Math.floor(window.innerWidth * ratio);
+    canvas.height = Math.floor(window.innerHeight * ratio);
+    canvas.style.width = `${window.innerWidth}px`;
+    canvas.style.height = `${window.innerHeight}px`;
+    context.setTransform(ratio, 0, 0, ratio, 0, 0);
+  }
+
+  function resizeCanvases() {
+    particleCanvasRatio = Math.min(window.devicePixelRatio || 1, 1.5);
+    fireworksCanvasRatio = Math.min(window.devicePixelRatio || 1, 1.15);
+
+    resizeCanvas(particleCanvas, particleContext, particleCanvasRatio);
+    resizeCanvas(fireworksCanvas, fireworksContext, fireworksCanvasRatio);
+
+    if (ambientParticles.length === 0) {
+      const ambientCount = window.innerWidth < 700 ? 22 : 32;
+      for (let index = 0; index < ambientCount; index += 1) {
+        ambientParticles.push(createAmbientParticle());
       }
+    }
+  }
 
-      const themes = [
-        {
-          name: 'No.1 Stylish',
-          pageBg1: '#0f1115',
-          pageBg2: '#171b22',
-          pageGlow1: 'rgba(55, 167, 255, 0.12)',
-          pageGlow2: 'rgba(232, 177, 90, 0.09)',
-          panel: 'rgba(29, 33, 42, 0.96)',
-          panel2: 'rgba(20, 23, 30, 0.96)',
-          displayBg: 'linear-gradient(180deg, rgba(10, 12, 16, 0.9), rgba(22, 25, 32, 0.96))',
-          text: '#f2f4f8',
-          muted: '#9ca3af',
-          border: 'rgba(255, 255, 255, 0.08)',
-          shadow: '0 20px 50px rgba(0, 0, 0, 0.45)',
-          digit: 'linear-gradient(180deg, #2b303c 0%, #232833 100%)',
-          digitHover: 'linear-gradient(180deg, #353c4a 0%, #2f3642 100%)',
-          operator: 'linear-gradient(180deg, #e8b15a 0%, #d8892b 100%)',
-          operatorHover: 'linear-gradient(180deg, #f2be76 0%, #e1973b 100%)',
-          operatorText: '#171208',
-          equal: 'linear-gradient(180deg, #37a7ff 0%, #1778ff 100%)',
-          equalHover: 'linear-gradient(180deg, #55b4ff 0%, #2c8cff 100%)',
-          equalText: '#ffffff',
-          historyBg: 'rgba(255, 255, 255, 0.03)',
-          historyItemBg: 'rgba(255, 255, 255, 0.04)',
-          historyItemBorder: 'rgba(255, 255, 255, 0.05)',
-          meteor: true,
-          meteorGlow: 'rgba(127, 198, 255, 0.95)',
-          meteorCount: 14
-        },
-        {
-          name: 'No.2 Minimal',
-          pageBg1: '#f8f8f6',
-          pageBg2: '#e7e7e4',
-          pageGlow1: 'rgba(95, 110, 140, 0.12)',
-          pageGlow2: 'rgba(74, 160, 120, 0.08)',
-          panel: 'rgba(255, 255, 255, 0.95)',
-          panel2: 'rgba(243, 244, 246, 0.98)',
-          displayBg: 'linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(242, 243, 246, 0.98))',
-          text: '#1f2937',
-          muted: '#667085',
-          border: 'rgba(31, 41, 55, 0.1)',
-          shadow: '0 18px 44px rgba(31, 41, 55, 0.14)',
-          digit: 'linear-gradient(180deg, #f3f4f6 0%, #e5e7eb 100%)',
-          digitHover: 'linear-gradient(180deg, #e8eaef 0%, #dbe0e8 100%)',
-          operator: 'linear-gradient(180deg, #20345b 0%, #13213f 100%)',
-          operatorHover: 'linear-gradient(180deg, #2d4a7f 0%, #1d335d 100%)',
-          operatorText: '#f8fafc',
-          equal: 'linear-gradient(180deg, #31b67a 0%, #18885a 100%)',
-          equalHover: 'linear-gradient(180deg, #49c58a 0%, #229a67 100%)',
-          equalText: '#ffffff',
-          historyBg: 'rgba(17, 24, 39, 0.04)',
-          historyItemBg: 'rgba(255, 255, 255, 0.8)',
-          historyItemBorder: 'rgba(31, 41, 55, 0.08)',
-          meteor: false
-        },
-        {
-          name: 'No.3 Future',
-          pageBg1: '#060816',
-          pageBg2: '#10172a',
-          pageGlow1: 'rgba(0, 229, 255, 0.12)',
-          pageGlow2: 'rgba(168, 85, 247, 0.1)',
-          panel: 'rgba(10, 15, 28, 0.96)',
-          panel2: 'rgba(17, 24, 39, 0.96)',
-          displayBg: 'linear-gradient(180deg, rgba(5, 9, 20, 0.94), rgba(13, 19, 34, 0.98))',
-          text: '#e5f4ff',
-          muted: '#8ea3b8',
-          border: 'rgba(125, 211, 252, 0.16)',
-          shadow: '0 24px 56px rgba(0, 0, 0, 0.5)',
-          digit: 'linear-gradient(180deg, #172033 0%, #111827 100%)',
-          digitHover: 'linear-gradient(180deg, #22304b 0%, #162233 100%)',
-          operator: 'linear-gradient(180deg, #22d3ee 0%, #0891b2 100%)',
-          operatorHover: 'linear-gradient(180deg, #67e8f9 0%, #0e7490 100%)',
-          operatorText: '#03111c',
-          equal: 'linear-gradient(180deg, #a855f7 0%, #7c3aed 100%)',
-          equalHover: 'linear-gradient(180deg, #c084fc 0%, #8b5cf6 100%)',
-          equalText: '#ffffff',
-          historyBg: 'rgba(255, 255, 255, 0.03)',
-          historyItemBg: 'rgba(255, 255, 255, 0.04)',
-          historyItemBorder: 'rgba(125, 211, 252, 0.12)',
-          meteor: true,
-          meteorGlow: 'rgba(0, 255, 255, 0.95)',
-          meteorCount: 16
-        },
-        {
-          name: 'No.4 Cafe',
-          pageBg1: '#f6ede1',
-          pageBg2: '#dbc7aa',
-          pageGlow1: 'rgba(196, 137, 94, 0.14)',
-          pageGlow2: 'rgba(62, 104, 72, 0.1)',
-          panel: 'rgba(250, 240, 226, 0.96)',
-          panel2: 'rgba(238, 224, 205, 0.98)',
-          displayBg: 'linear-gradient(180deg, rgba(255, 248, 239, 0.98), rgba(244, 230, 208, 0.98))',
-          text: '#3f2f23',
-          muted: '#7b6656',
-          border: 'rgba(112, 82, 58, 0.12)',
-          shadow: '0 20px 46px rgba(112, 82, 58, 0.18)',
-          digit: 'linear-gradient(180deg, #e8dccd 0%, #d9c5ad 100%)',
-          digitHover: 'linear-gradient(180deg, #dcc9b0 0%, #ccb595 100%)',
-          operator: 'linear-gradient(180deg, #c98a58 0%, #a96b38 100%)',
-          operatorHover: 'linear-gradient(180deg, #d9a06f 0%, #ba7c47 100%)',
-          operatorText: '#fff8f0',
-          equal: 'linear-gradient(180deg, #2f6d45 0%, #1f4f34 100%)',
-          equalHover: 'linear-gradient(180deg, #3a8252 0%, #286143 100%)',
-          equalText: '#ffffff',
-          historyBg: 'rgba(255, 255, 255, 0.36)',
-          historyItemBg: 'rgba(255, 250, 244, 0.9)',
-          historyItemBorder: 'rgba(112, 82, 58, 0.1)',
-          meteor: false
-        },
-        {
-          name: 'No.5 Pop',
-          pageBg1: '#fdfcff',
-          pageBg2: '#f1f3ff',
-          pageGlow1: 'rgba(255, 179, 71, 0.12)',
-          pageGlow2: 'rgba(255, 105, 180, 0.1)',
-          panel: 'rgba(255, 255, 255, 0.96)',
-          panel2: 'rgba(245, 246, 255, 0.98)',
-          displayBg: 'linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 248, 255, 0.98))',
-          text: '#2b2436',
-          muted: '#786b89',
-          border: 'rgba(130, 117, 152, 0.12)',
-          shadow: '0 18px 42px rgba(130, 117, 152, 0.16)',
-          digit: 'linear-gradient(180deg, #f2eefe 0%, #e8e2ff 100%)',
-          digitHover: 'linear-gradient(180deg, #e8e2ff 0%, #ddd6fe 100%)',
-          operator: 'linear-gradient(180deg, #ffb870 0%, #ff8f4a 100%)',
-          operatorHover: 'linear-gradient(180deg, #ffc78f 0%, #ff9e61 100%)',
-          operatorText: '#2d1a08',
-          equal: 'linear-gradient(180deg, #ff6fa8 0%, #f43f8a 100%)',
-          equalHover: 'linear-gradient(180deg, #ff8abc 0%, #ff5f9e 100%)',
-          equalText: '#ffffff',
-          historyBg: 'rgba(124, 58, 237, 0.05)',
-          historyItemBg: 'rgba(255, 255, 255, 0.92)',
-          historyItemBorder: 'rgba(130, 117, 152, 0.1)',
-          meteor: false
-        },
-        {
-          name: 'No.6 Cool',
-          pageBg1: '#edf4f8',
-          pageBg2: '#cfd9e3',
-          pageGlow1: 'rgba(56, 189, 248, 0.14)',
-          pageGlow2: 'rgba(34, 197, 94, 0.08)',
-          panel: 'rgba(246, 250, 252, 0.96)',
-          panel2: 'rgba(228, 236, 243, 0.98)',
-          displayBg: 'linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(240, 246, 250, 0.98))',
-          text: '#22303c',
-          muted: '#657684',
-          border: 'rgba(76, 99, 120, 0.12)',
-          shadow: '0 18px 42px rgba(52, 68, 82, 0.16)',
-          digit: 'linear-gradient(180deg, #e7eef4 0%, #d5e1ea 100%)',
-          digitHover: 'linear-gradient(180deg, #dce6ef 0%, #c7d5e1 100%)',
-          operator: 'linear-gradient(180deg, #7cc6ff 0%, #4aa7ea 100%)',
-          operatorHover: 'linear-gradient(180deg, #98d4ff 0%, #61b6f0 100%)',
-          operatorText: '#0d2230',
-          equal: 'linear-gradient(180deg, #a6e22e 0%, #77c918 100%)',
-          equalHover: 'linear-gradient(180deg, #b9ef4f 0%, #8ad320 100%)',
-          equalText: '#13210a',
-          historyBg: 'rgba(255, 255, 255, 0.42)',
-          historyItemBg: 'rgba(255, 255, 255, 0.92)',
-          historyItemBorder: 'rgba(76, 99, 120, 0.08)',
-          meteor: false
-        },
-        {
-          name: 'No.7 Luxury',
-          pageBg1: '#2b0f17',
-          pageBg2: '#12070c',
-          pageGlow1: 'rgba(245, 158, 11, 0.12)',
-          pageGlow2: 'rgba(244, 63, 94, 0.1)',
-          panel: 'rgba(44, 19, 27, 0.96)',
-          panel2: 'rgba(21, 10, 16, 0.98)',
-          displayBg: 'linear-gradient(180deg, rgba(59, 25, 35, 0.96), rgba(28, 13, 19, 0.98))',
-          text: '#fff2f4',
-          muted: '#c5aab0',
-          border: 'rgba(245, 158, 11, 0.12)',
-          shadow: '0 24px 56px rgba(0, 0, 0, 0.48)',
-          digit: 'linear-gradient(180deg, #4a2a32 0%, #331b21 100%)',
-          digitHover: 'linear-gradient(180deg, #5e3440 0%, #42232a 100%)',
-          operator: 'linear-gradient(180deg, #f4d27a 0%, #c9a24c 100%)',
-          operatorHover: 'linear-gradient(180deg, #fde08c 0%, #d4b15d 100%)',
-          operatorText: '#2c1b05',
-          equal: 'linear-gradient(180deg, #d9465f 0%, #a61d3a 100%)',
-          equalHover: 'linear-gradient(180deg, #f05f78 0%, #b92947 100%)',
-          equalText: '#fff7f8',
-          historyBg: 'rgba(255, 255, 255, 0.04)',
-          historyItemBg: 'rgba(255, 255, 255, 0.05)',
-          historyItemBorder: 'rgba(245, 158, 11, 0.12)',
-          meteor: false
-        },
-        {
-          name: 'No.8 Natural',
-          pageBg1: '#f6f1e8',
-          pageBg2: '#e4d7c3',
-          pageGlow1: 'rgba(132, 145, 96, 0.12)',
-          pageGlow2: 'rgba(188, 108, 61, 0.08)',
-          panel: 'rgba(251, 246, 237, 0.96)',
-          panel2: 'rgba(239, 231, 218, 0.98)',
-          displayBg: 'linear-gradient(180deg, rgba(255, 251, 245, 0.98), rgba(245, 238, 227, 0.98))',
-          text: '#3e3427',
-          muted: '#7c6e60',
-          border: 'rgba(126, 103, 77, 0.12)',
-          shadow: '0 20px 46px rgba(126, 103, 77, 0.16)',
-          digit: 'linear-gradient(180deg, #efe7da 0%, #ddd2bf 100%)',
-          digitHover: 'linear-gradient(180deg, #e4dac9 0%, #d0c1aa 100%)',
-          operator: 'linear-gradient(180deg, #7d8b53 0%, #5f6d3a 100%)',
-          operatorHover: 'linear-gradient(180deg, #91a365 0%, #728147 100%)',
-          operatorText: '#f9f6ef',
-          equal: 'linear-gradient(180deg, #c8794f 0%, #a85a32 100%)',
-          equalHover: 'linear-gradient(180deg, #da8b60 0%, #ba6a40 100%)',
-          equalText: '#fff8f1',
-          historyBg: 'rgba(255, 255, 255, 0.42)',
-          historyItemBg: 'rgba(255, 252, 247, 0.94)',
-          historyItemBorder: 'rgba(126, 103, 77, 0.1)',
-          meteor: false
-        },
-        {
-          name: 'No.9 Gaming',
-          pageBg1: '#050608',
-          pageBg2: '#0d1217',
-          pageGlow1: 'rgba(34, 197, 94, 0.16)',
-          pageGlow2: 'rgba(236, 72, 153, 0.12)',
-          panel: 'rgba(12, 15, 18, 0.96)',
-          panel2: 'rgba(17, 21, 26, 0.98)',
-          displayBg: 'linear-gradient(180deg, rgba(7, 10, 14, 0.96), rgba(15, 18, 24, 0.98))',
-          text: '#e7f7ea',
-          muted: '#96a6a0',
-          border: 'rgba(34, 197, 94, 0.14)',
-          shadow: '0 24px 58px rgba(0, 0, 0, 0.5)',
-          digit: 'linear-gradient(180deg, #161b21 0%, #0e1217 100%)',
-          digitHover: 'linear-gradient(180deg, #232a33 0%, #151b22 100%)',
-          operator: 'linear-gradient(180deg, #00e676 0%, #00b85a 100%)',
-          operatorHover: 'linear-gradient(180deg, #2af08a 0%, #18c66a 100%)',
-          operatorText: '#04110a',
-          equal: 'linear-gradient(180deg, #ff4fd8 0%, #d61cff 100%)',
-          equalHover: 'linear-gradient(180deg, #ff78e0 0%, #e24dff 100%)',
-          equalText: '#fff7ff',
-          historyBg: 'rgba(255, 255, 255, 0.03)',
-          historyItemBg: 'rgba(255, 255, 255, 0.04)',
-          historyItemBorder: 'rgba(34, 197, 94, 0.12)',
-          meteor: true,
-          meteorGlow: 'rgba(57, 255, 20, 0.95)',
-          meteorCount: 18
-        },
-        {
-          name: 'No.10 Modern',
-          pageBg1: '#1a1c1f',
-          pageBg2: '#ece8df',
-          pageGlow1: 'rgba(120, 119, 198, 0.12)',
-          pageGlow2: 'rgba(251, 191, 36, 0.1)',
-          panel: 'rgba(245, 242, 236, 0.96)',
-          panel2: 'rgba(228, 223, 214, 0.98)',
-          displayBg: 'linear-gradient(180deg, rgba(251, 248, 241, 0.98), rgba(238, 233, 225, 0.98))',
-          text: '#2d3138',
-          muted: '#6d6b67',
-          border: 'rgba(77, 76, 72, 0.12)',
-          shadow: '0 18px 42px rgba(34, 34, 34, 0.16)',
-          digit: 'linear-gradient(180deg, #e9e5dd 0%, #d8d1c5 100%)',
-          digitHover: 'linear-gradient(180deg, #ddd7ca 0%, #ccc3b4 100%)',
-          operator: 'linear-gradient(180deg, #8a6fa8 0%, #654d84 100%)',
-          operatorHover: 'linear-gradient(180deg, #9b83ba 0%, #765c95 100%)',
-          operatorText: '#fffafc',
-          equal: 'linear-gradient(180deg, #3b82f6 0%, #1d4ed8 100%)',
-          equalHover: 'linear-gradient(180deg, #5b94fb 0%, #305fe0 100%)',
-          equalText: '#ffffff',
-          historyBg: 'rgba(255, 255, 255, 0.42)',
-          historyItemBg: 'rgba(255, 251, 244, 0.94)',
-          historyItemBorder: 'rgba(77, 76, 72, 0.1)',
-          meteor: false
-        }
-      ];
+  function createAmbientParticle() {
+    return {
+      x: Math.random() * window.innerWidth,
+      y: Math.random() * window.innerHeight,
+      radius: Math.random() * 2.2 + 0.6,
+      speedX: (Math.random() - 0.5) * 0.35,
+      speedY: Math.random() * -0.4 - 0.12,
+      alpha: Math.random() * 0.55 + 0.2,
+      hue: Math.floor(Math.random() * 360)
+    };
+  }
 
-      function applyTheme(theme, themeIndex) {
-        const rootStyle = document.documentElement.style;
-        rootStyle.setProperty('--page-bg-1', theme.pageBg1);
-        rootStyle.setProperty('--page-bg-2', theme.pageBg2);
-        rootStyle.setProperty('--page-glow-1', theme.pageGlow1);
-        rootStyle.setProperty('--page-glow-2', theme.pageGlow2);
-        rootStyle.setProperty('--panel', theme.panel);
-        rootStyle.setProperty('--panel-2', theme.panel2);
-        rootStyle.setProperty('--display-bg', theme.displayBg);
-        rootStyle.setProperty('--text', theme.text);
-        rootStyle.setProperty('--muted', theme.muted);
-        rootStyle.setProperty('--border', theme.border);
-        rootStyle.setProperty('--shadow', theme.shadow);
-        rootStyle.setProperty('--digit', theme.digit);
-        rootStyle.setProperty('--digit-hover', theme.digitHover);
-        rootStyle.setProperty('--operator', theme.operator);
-        rootStyle.setProperty('--operator-hover', theme.operatorHover);
-        rootStyle.setProperty('--operator-text', theme.operatorText);
-        rootStyle.setProperty('--equal', theme.equal);
-        rootStyle.setProperty('--equal-hover', theme.equalHover);
-        rootStyle.setProperty('--equal-text', theme.equalText);
-        rootStyle.setProperty('--history-bg', theme.historyBg);
-        rootStyle.setProperty('--history-item-bg', theme.historyItemBg);
-        rootStyle.setProperty('--history-item-border', theme.historyItemBorder);
-        rootStyle.setProperty('--meteor-glow', theme.meteorGlow || 'rgba(255,255,255,0.85)');
-        themeSelectEl.value = String(themeIndex);
-        renderMeteors(theme);
+  function getThemeColors() {
+    const styles = getComputedStyle(document.body);
+    return [
+      styles.getPropertyValue('--cyan').trim(),
+      styles.getPropertyValue('--pink').trim(),
+      styles.getPropertyValue('--yellow').trim(),
+      styles.getPropertyValue('--violet').trim(),
+      styles.getPropertyValue('--orange').trim(),
+      styles.getPropertyValue('--blue').trim(),
+      '#ffffff'
+    ].filter(Boolean);
+  }
+
+  function animateParticles() {
+    particleContext.clearRect(0, 0, window.innerWidth, window.innerHeight);
+
+    for (const particle of ambientParticles) {
+      particle.x += particle.speedX;
+      particle.y += particle.speedY;
+      particle.hue = (particle.hue + 0.4) % 360;
+
+      if (particle.y < -10) {
+        particle.y = window.innerHeight + 10;
+        particle.x = Math.random() * window.innerWidth;
       }
+      if (particle.x < -10) particle.x = window.innerWidth + 10;
+      if (particle.x > window.innerWidth + 10) particle.x = -10;
 
-      function applyThemeByIndex(index) {
-        const safeIndex = ((index % themes.length) + themes.length) % themes.length;
-        applyTheme(themes[safeIndex], safeIndex);
+      particleContext.beginPath();
+      particleContext.fillStyle = `hsla(${particle.hue}, 100%, 70%, ${particle.alpha})`;
+      particleContext.shadowBlur = 16;
+      particleContext.shadowColor = `hsla(${particle.hue}, 100%, 65%, .9)`;
+      particleContext.arc(particle.x, particle.y, particle.radius, 0, Math.PI * 2);
+      particleContext.fill();
+    }
+
+    particleContext.shadowBlur = 0;
+
+    for (let index = particles.length - 1; index >= 0; index -= 1) {
+      const particle = particles[index];
+      particle.x += particle.vx;
+      particle.y += particle.vy;
+      particle.vy += particle.gravity;
+      particle.rotation += particle.rotationSpeed;
+      particle.life -= particle.decay;
+
+      particleContext.save();
+      particleContext.translate(particle.x, particle.y);
+      particleContext.rotate(particle.rotation);
+      particleContext.globalAlpha = Math.max(particle.life, 0);
+      particleContext.fillStyle = particle.color;
+      particleContext.shadowBlur = 12;
+      particleContext.shadowColor = particle.color;
+      particleContext.fillRect(-particle.size / 2, -particle.size / 2, particle.size, particle.size * 0.55);
+      particleContext.restore();
+
+      if (particle.life <= 0 || particle.y > window.innerHeight + 50) {
+        particles.splice(index, 1);
       }
+    }
 
-      applyThemeByIndex(Math.floor(Math.random() * themes.length));
+    particleContext.globalAlpha = 1;
+    requestAnimationFrame(animateParticles);
+  }
 
-      themeSelectEl.addEventListener('change', () => {
-        applyThemeByIndex(Number(themeSelectEl.value));
+  function launchConfetti(intensity = 90) {
+    const rect = calculator.getBoundingClientRect();
+    const originX = rect.left + rect.width / 2;
+    const originY = rect.top + rect.height * 0.35;
+    const colors = getThemeColors();
+
+    for (let index = 0; index < intensity; index += 1) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = Math.random() * 8 + 3;
+      particles.push({
+        x: originX,
+        y: originY,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed - 4,
+        gravity: 0.16 + Math.random() * 0.08,
+        rotation: Math.random() * Math.PI,
+        rotationSpeed: (Math.random() - 0.5) * 0.35,
+        size: Math.random() * 8 + 5,
+        color: colors[Math.floor(Math.random() * colors.length)],
+        life: 1,
+        decay: Math.random() * 0.012 + 0.012
       });
+    }
+  }
 
-      const state = {
-        currentInput: '0',
-        firstOperand: null,
-        operator: null,
-        waitingForSecondOperand: false,
-        lastExpression: ''
-      };
+  function launchFirework() {
+    if (fireworkRockets.length >= MAX_FIREWORK_ROCKETS) return false;
 
-      function updateDisplay() {
-        if (state.lastExpression && state.firstOperand === null && state.operator === null && !state.waitingForSecondOperand) {
-          expressionEl.textContent = state.lastExpression;
-        } else {
-          const expressionParts = [];
-          if (state.firstOperand !== null) {
-            expressionParts.push(formatNumber(state.firstOperand));
-          }
-          if (state.operator) {
-            expressionParts.push(state.operator);
-          }
-          if (state.firstOperand === null && state.operator === null && state.currentInput !== '0') {
-            expressionParts.push(state.currentInput);
-          }
-          expressionEl.textContent = expressionParts.join(' ');
-        }
-        resultEl.textContent = state.currentInput;
-      }
+    const colors = getThemeColors();
+    const color = colors[Math.floor(Math.random() * colors.length)];
+    const accentColor = colors[Math.floor(Math.random() * colors.length)];
+    const launchAngle = FIREWORK_LAUNCH_ANGLES[Math.floor(Math.random() * FIREWORK_LAUNCH_ANGLES.length)];
+    const launchRadians = launchAngle * Math.PI / 180;
+    const launchSpeed = 9.2 + Math.random() * 2.2;
+    const x = launchAngle === 45
+      ? window.innerWidth * (0.08 + Math.random() * 0.22)
+      : launchAngle === 135
+        ? window.innerWidth * (0.7 + Math.random() * 0.22)
+        : window.innerWidth * (0.14 + Math.random() * 0.72);
 
-      function formatNumber(value) {
-        if (value === null || value === undefined || value === '') return '0';
-        const num = Number(value);
-        if (Number.isFinite(num)) {
-          return String(num);
-        }
-        return String(value);
-      }
+    fireworkRockets.push({
+      x,
+      y: window.innerHeight + 12,
+      previousX: x,
+      previousY: window.innerHeight + 12,
+      vx: Math.cos(launchRadians) * launchSpeed,
+      vy: -Math.sin(launchRadians) * launchSpeed,
+      targetY: window.innerHeight * (0.1 + Math.random() * 0.42),
+      color,
+      accentColor,
+      flowerType: flowerTypes[Math.floor(Math.random() * flowerTypes.length)],
+      rotation: Math.random() * Math.PI * 2,
+      size: 2 + Math.random() * 1.3,
+      launchAngle
+    });
 
-      function appendDigit(digit) {
-        if (state.currentInput === 'Error') {
-          clearAll();
-        }
-        if (state.lastExpression && state.firstOperand === null && state.operator === null && !state.waitingForSecondOperand) {
-          state.lastExpression = '';
-          state.currentInput = '0';
-        }
-        if (state.waitingForSecondOperand) {
-          state.currentInput = digit;
-          state.waitingForSecondOperand = false;
-          resultEl.textContent = state.currentInput;
-          return;
-        }
+    return true;
+  }
 
-        if (state.currentInput === '0') {
-          state.currentInput = digit;
-        } else {
-          state.currentInput += digit;
-        }
-      }
+  function getFlowerRadius(type, angle, layer) {
+    switch (type) {
+      case 'sakura':
+        return 0.34 + 0.66 * (0.5 + 0.5 * Math.cos(5 * angle));
+      case 'rose':
+        return 0.43 + 0.42 * (0.5 + 0.5 * Math.cos(7 * angle + layer * 0.9));
+      case 'chrysanthemum':
+        return 0.55 + 0.45 * (0.5 + 0.5 * Math.cos(18 * angle + layer * 0.45));
+      case 'lily':
+        return 0.28 + 0.72 * (0.5 + 0.5 * Math.cos(6 * angle));
+      case 'lotus':
+        return 0.4 + 0.6 * Math.abs(Math.cos(4 * angle + layer * 0.35));
+      case 'sunflower':
+        return 0.5 + 0.5 * (0.5 + 0.5 * Math.cos(12 * angle));
+      default:
+        return 1;
+    }
+  }
 
-      function appendDecimal() {
-        if (state.currentInput === 'Error') {
-          clearAll();
-        }
-        if (state.lastExpression && state.firstOperand === null && state.operator === null && !state.waitingForSecondOperand) {
-          state.lastExpression = '';
-          state.currentInput = '0';
-        }
-        if (state.waitingForSecondOperand) {
-          state.currentInput = '0.';
-          state.waitingForSecondOperand = false;
-          return;
-        }
-        if (!state.currentInput.includes('.')) {
-          state.currentInput += '.';
-        }
-      }
+  function getFlowerSparkCount(type) {
+    const compact = window.innerWidth < 700;
+    const counts = {
+      sakura: compact ? 34 : 46,
+      rose: compact ? 38 : 50,
+      chrysanthemum: compact ? 42 : 58,
+      lily: compact ? 34 : 46,
+      lotus: compact ? 36 : 48,
+      sunflower: compact ? 40 : 54
+    };
+    return counts[type] || (compact ? 34 : 46);
+  }
 
-      function calculate(first, operator, second) {
-        const a = Number(first);
-        const b = Number(second);
+  function pushFlowerSpark(rocket, angle, speed, color, options = {}) {
+    const verticalScale = options.verticalScale || 0.9;
+    const jitter = options.jitter || 0;
+    const adjustedAngle = angle + (Math.random() - 0.5) * jitter;
+    const adjustedSpeed = speed * (0.96 + Math.random() * 0.08);
 
-        if (!Number.isFinite(a) || !Number.isFinite(b)) {
-          return 0;
-        }
+    fireworkSparks.push({
+      x: rocket.x,
+      y: rocket.y,
+      previousX: rocket.x,
+      previousY: rocket.y,
+      vx: Math.cos(adjustedAngle) * adjustedSpeed,
+      vy: Math.sin(adjustedAngle) * adjustedSpeed * verticalScale,
+      gravity: options.gravity || (0.052 + Math.random() * 0.018),
+      friction: options.friction || (0.978 + Math.random() * 0.008),
+      life: options.life || 1,
+      decay: options.decay || (0.018 + Math.random() * 0.009),
+      color,
+      size: options.size || (1 + Math.random() * 1.5)
+    });
+  }
 
-        switch (operator) {
-          case '+':
-            return a + b;
-          case '−':
-            return a - b;
-          case '×':
-            return a * b;
-          case '÷':
-            return b === 0 ? 'Error' : a / b;
-          default:
-            return b;
-        }
-      }
+  function explodeFirework(rocket) {
+    const remainingCapacity = MAX_FIREWORK_SPARKS - fireworkSparks.length;
+    if (remainingCapacity <= 0) return;
 
-      function chooseOperator(nextOperator) {
-        if (state.currentInput === 'Error') {
-          return;
-        }
-        if (state.lastExpression && state.firstOperand === null && state.operator === null && !state.waitingForSecondOperand) {
-          state.lastExpression = '';
-        }
-        if (state.firstOperand === null) {
-          state.firstOperand = state.currentInput;
-        } else if (state.operator && !state.waitingForSecondOperand) {
-          const result = calculate(state.firstOperand, state.operator, state.currentInput);
-          if (result === 'Error') {
-            commitError();
-            return;
-          }
-          state.currentInput = trimResult(result);
-          state.firstOperand = state.currentInput;
-        }
+    const flowerType = rocket.flowerType;
+    const requestedCount = getFlowerSparkCount(flowerType);
+    const sparkCount = Math.min(requestedCount, remainingCapacity);
+    const layers = flowerType === 'rose' || flowerType === 'chrysanthemum' ? 2 : 1;
+    const outerCount = Math.max(1, Math.floor(sparkCount * 0.82));
 
-        state.operator = nextOperator;
-        state.waitingForSecondOperand = true;
-      }
+    for (let index = 0; index < outerCount; index += 1) {
+      const layer = index % layers;
+      const baseAngle = (Math.PI * 2 * index) / outerCount;
+      const angle = baseAngle + rocket.rotation + layer * 0.12;
+      const radius = getFlowerRadius(flowerType, baseAngle, layer);
+      const layerScale = layer === 0 ? 1 : 0.73;
+      const speed = (2.6 + radius * 3.6) * layerScale * FIREWORK_EXPLOSION_SCALE;
+      const color = index % 4 === 0 ? rocket.accentColor : rocket.color;
 
-      function commitResult() {
-        if (state.firstOperand === null || !state.operator) {
-          return;
-        }
-
-        const expressionBefore = `${formatNumber(state.firstOperand)} ${state.operator} ${state.currentInput}`;
-        const result = calculate(state.firstOperand, state.operator, state.currentInput);
-
-        if (result === 'Error') {
-          commitError();
-          return;
-        }
-
-        const output = trimResult(result);
-        state.lastExpression = `${formatNumber(state.firstOperand)} ${state.operator} ${state.currentInput} = ${output}`;
-        state.currentInput = output;
-        state.firstOperand = null;
-        state.operator = null;
-        state.waitingForSecondOperand = false;
-      }
-
-      function commitError() {
-        state.currentInput = 'Error';
-        state.firstOperand = null;
-        state.operator = null;
-        state.waitingForSecondOperand = false;
-        state.lastExpression = '';
-      }
-
-      function trimResult(value) {
-        if (typeof value === 'string') {
-          return value;
-        }
-
-        const rounded = Number.parseFloat(Number(value).toFixed(10));
-        return String(rounded);
-      }
-
-      function clearAll() {
-        state.currentInput = '0';
-        state.firstOperand = null;
-        state.operator = null;
-        state.waitingForSecondOperand = false;
-        state.lastExpression = '';
-      }
-
-      function backspace() {
-        if (state.waitingForSecondOperand || state.currentInput === 'Error') {
-          return;
-        }
-        if (state.currentInput.length <= 1 || (state.currentInput.length === 2 && state.currentInput.startsWith('-'))) {
-          state.currentInput = '0';
-          return;
-        }
-        state.currentInput = state.currentInput.slice(0, -1);
-      }
-
-      keys.addEventListener('click', (event) => {
-        const button = event.target.closest('button');
-        if (!button) return;
-
-        const action = button.dataset.action;
-        const value = button.dataset.value;
-
-        switch (action) {
-          case 'digit':
-            appendDigit(value);
-            break;
-          case 'decimal':
-            appendDecimal();
-            break;
-          case 'operator':
-            chooseOperator(value);
-            break;
-          case 'equals':
-            commitResult();
-            break;
-          case 'clear':
-            clearAll();
-            break;
-          case 'backspace':
-            backspace();
-            break;
-        }
-
-        updateDisplay();
+      pushFlowerSpark(rocket, angle, speed, color, {
+        verticalScale: flowerType === 'lily' ? 1.05 : 0.9,
+        jitter: flowerType === 'chrysanthemum' ? 0.035 : 0.018,
+        decay: flowerType === 'chrysanthemum' ? 0.016 + Math.random() * 0.007 : 0.019 + Math.random() * 0.008,
+        size: flowerType === 'chrysanthemum' ? 0.85 + Math.random() * 1.1 : 1 + Math.random() * 1.5
       });
+    }
 
-      document.addEventListener('keydown', (event) => {
-        const { key } = event;
-        if (/^\d$/.test(key)) {
-          appendDigit(key);
-        } else if (key === '.') {
-          appendDecimal();
-        } else if (['+', '-', '*', '/'].includes(key)) {
-          const map = { '+': '+', '-': '−', '*': '×', '/': '÷' };
-          chooseOperator(map[key]);
-        } else if (key === 'Enter' || key === '=') {
-          event.preventDefault();
-          commitResult();
-        } else if (key === 'c' || key === 'C') {
-          clearAll();
-        } else if (key === 'Backspace') {
-          event.preventDefault();
-          backspace();
-        } else if (key === 'Escape') {
-          clearAll();
-        } else {
-          return;
-        }
-        updateDisplay();
+    const centerCount = Math.min(sparkCount - outerCount, MAX_FIREWORK_SPARKS - fireworkSparks.length);
+    for (let index = 0; index < centerCount; index += 1) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = (flowerType === 'sunflower'
+        ? 0.7 + Math.random() * 1.8
+        : 1 + Math.random() * 2.4) * FIREWORK_EXPLOSION_SCALE;
+      pushFlowerSpark(rocket, angle, speed, index % 2 ? rocket.color : rocket.accentColor, {
+        verticalScale: 0.92,
+        gravity: 0.045 + Math.random() * 0.014,
+        decay: 0.022 + Math.random() * 0.008,
+        size: 0.9 + Math.random() * 1.25
       });
+    }
 
-      updateDisplay();
-    })();
-  
+    flashLayer.classList.remove('firework-flash');
+    void flashLayer.offsetWidth;
+    flashLayer.classList.add('firework-flash');
+  }
+
+  function stopFireworks() {
+    if (fireworksAnimationId !== null) {
+      cancelAnimationFrame(fireworksAnimationId);
+      fireworksAnimationId = null;
+    }
+    fireworkRockets.length = 0;
+    fireworkSparks.length = 0;
+    fireworksLaunchedCount = 0;
+    fireworksTargetCount = 0;
+    nextFireworkTime = 0;
+    lastFireworksFrame = 0;
+    fireworksContext.clearRect(0, 0, window.innerWidth, window.innerHeight);
+    flashLayer.classList.remove('firework-flash');
+  }
+
+  function startFireworks(totalLaunches = FIREWORK_LAUNCH_COUNT) {
+    stopFireworks();
+
+    const now = performance.now();
+    fireworksTargetCount = Math.max(1, Math.floor(totalLaunches));
+    fireworksLaunchedCount = 0;
+    nextFireworkTime = now;
+
+    if (launchFirework()) {
+      fireworksLaunchedCount += 1;
+      nextFireworkTime = now + FIREWORK_LAUNCH_INTERVAL;
+    }
+
+    fireworksAnimationId = requestAnimationFrame(animateFireworks);
+  }
+
+  function animateFireworks(timestamp) {
+    const elapsed = lastFireworksFrame === 0 ? FIREWORK_FRAME_INTERVAL : timestamp - lastFireworksFrame;
+    if (elapsed < FIREWORK_FRAME_INTERVAL) {
+      fireworksAnimationId = requestAnimationFrame(animateFireworks);
+      return;
+    }
+    const frameScale = Math.min(2.5, elapsed / (1000 / 60));
+    lastFireworksFrame = timestamp;
+
+    fireworksContext.clearRect(0, 0, window.innerWidth, window.innerHeight);
+    fireworksContext.save();
+    fireworksContext.globalCompositeOperation = 'lighter';
+    fireworksContext.lineCap = 'round';
+
+    if (fireworksLaunchedCount < fireworksTargetCount && timestamp >= nextFireworkTime) {
+      if (launchFirework()) {
+        fireworksLaunchedCount += 1;
+        nextFireworkTime = timestamp + FIREWORK_LAUNCH_INTERVAL;
+      } else {
+        nextFireworkTime = timestamp + 60;
+      }
+    }
+
+    for (let index = fireworkRockets.length - 1; index >= 0; index -= 1) {
+      const rocket = fireworkRockets[index];
+      rocket.previousX = rocket.x;
+      rocket.previousY = rocket.y;
+      rocket.x += rocket.vx * frameScale;
+      rocket.y += rocket.vy * frameScale;
+      rocket.vy += 0.095 * frameScale;
+
+      fireworksContext.globalAlpha = 0.8;
+      fireworksContext.strokeStyle = rocket.color;
+      fireworksContext.lineWidth = Math.max(1, rocket.size * 0.8);
+      fireworksContext.shadowBlur = 8;
+      fireworksContext.shadowColor = rocket.color;
+      fireworksContext.beginPath();
+      fireworksContext.moveTo(rocket.previousX, rocket.previousY + 8);
+      fireworksContext.lineTo(rocket.x, rocket.y);
+      fireworksContext.stroke();
+
+      fireworksContext.globalAlpha = 1;
+      fireworksContext.fillStyle = rocket.color;
+      fireworksContext.beginPath();
+      fireworksContext.arc(rocket.x, rocket.y, rocket.size, 0, Math.PI * 2);
+      fireworksContext.fill();
+
+      if (rocket.y <= rocket.targetY || rocket.vy >= -1.4) {
+        explodeFirework(rocket);
+        fireworkRockets.splice(index, 1);
+      }
+    }
+
+    fireworksContext.shadowBlur = 5;
+    for (let index = fireworkSparks.length - 1; index >= 0; index -= 1) {
+      const spark = fireworkSparks[index];
+      spark.previousX = spark.x;
+      spark.previousY = spark.y;
+      const scaledFriction = Math.pow(spark.friction, frameScale);
+      spark.vx *= scaledFriction;
+      spark.vy = spark.vy * scaledFriction + spark.gravity * frameScale;
+      spark.x += spark.vx * frameScale;
+      spark.y += spark.vy * frameScale;
+      spark.life -= spark.decay * frameScale;
+
+      fireworksContext.lineWidth = spark.size;
+      fireworksContext.strokeStyle = spark.color;
+      fireworksContext.shadowColor = spark.color;
+      fireworksContext.globalAlpha = Math.max(0, spark.life);
+      fireworksContext.beginPath();
+      fireworksContext.moveTo(spark.previousX, spark.previousY);
+      fireworksContext.lineTo(spark.x, spark.y);
+      fireworksContext.stroke();
+
+      if (spark.life <= 0 || spark.y > window.innerHeight + 30) {
+        fireworkSparks.splice(index, 1);
+      }
+    }
+
+    fireworksContext.restore();
+    fireworksContext.globalAlpha = 1;
+    fireworksContext.shadowBlur = 0;
+
+    const launchesPending = fireworksLaunchedCount < fireworksTargetCount;
+    if (launchesPending || fireworkRockets.length > 0 || fireworkSparks.length > 0) {
+      fireworksAnimationId = requestAnimationFrame(animateFireworks);
+    } else {
+      stopFireworks();
+    }
+  }
+
+  function getOperatorSymbol(selectedOperator) {
+    const symbols = { '+': '＋', '-': '−', '*': '×', '/': '÷' };
+    return symbols[selectedOperator] || selectedOperator || '';
+  }
+
+  function updateExpressionForCurrentInput() {
+    if (operator && previousValue !== null && !waitingForOperand) {
+      expressionText = `${formatValue(previousValue)} ${getOperatorSymbol(operator)} ${formatValue(currentValue)}`;
+    }
+  }
+
+  function formatValue(value) {
+    if (value === 'Error') return value;
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return 'Error';
+
+    const abs = Math.abs(numeric);
+    if (abs >= 1e12 || (abs > 0 && abs < 1e-8)) {
+      return numeric.toExponential(7).replace(/\.0+e/, 'e');
+    }
+
+    const [integerPart, decimalPart] = String(value).split('.');
+    const formattedInteger = Number(integerPart).toLocaleString('ja-JP');
+    return decimalPart !== undefined ? `${formattedInteger}.${decimalPart}` : formattedInteger;
+  }
+
+  function updateDisplay(animate = false) {
+    expressionDisplay.textContent = expressionText;
+    expressionDisplay.classList.toggle('is-empty', expressionText === '');
+    mainDisplay.textContent = formatValue(currentValue);
+
+    const digitCount = currentValue.replace(/[^0-9]/g, '').length;
+    meterBar.style.width = `${Math.min(100, 18 + digitCount * 7)}%`;
+
+    if (animate) {
+      mainDisplay.classList.remove('burst');
+      void mainDisplay.offsetWidth;
+      mainDisplay.classList.add('burst');
+    }
+  }
+
+  function inputDigit(digit) {
+    if (waitingForOperand && operator === null && previousValue === null) {
+      expressionText = '';
+    }
+    if (currentValue === 'Error' || waitingForOperand) {
+      currentValue = digit;
+      waitingForOperand = false;
+    } else if (currentValue === '0') {
+      currentValue = digit;
+    } else if (currentValue.replace(/[^0-9]/g, '').length < 14) {
+      currentValue += digit;
+    }
+    updateExpressionForCurrentInput();
+    updateDisplay();
+  }
+
+  function inputDecimal() {
+    if (waitingForOperand && operator === null && previousValue === null) {
+      expressionText = '';
+    }
+    if (currentValue === 'Error' || waitingForOperand) {
+      currentValue = '0.';
+      waitingForOperand = false;
+    } else if (!currentValue.includes('.')) {
+      currentValue += '.';
+    }
+    updateExpressionForCurrentInput();
+    updateDisplay();
+  }
+
+  function calculate(left, right, selectedOperator) {
+    switch (selectedOperator) {
+      case '+': return left + right;
+      case '-': return left - right;
+      case '*': return left * right;
+      case '/': return right === 0 ? NaN : left / right;
+      default: return right;
+    }
+  }
+
+  function normalizeResult(result) {
+    if (!Number.isFinite(result)) return 'Error';
+    const rounded = Math.round((result + Number.EPSILON) * 1e10) / 1e10;
+    return String(rounded);
+  }
+
+  function chooseOperator(nextOperator) {
+    if (currentValue === 'Error') {
+      clearAll();
+      return;
+    }
+
+    const inputValue = Number(currentValue);
+
+    if (operator && previousValue !== null && !waitingForOperand) {
+      const result = calculate(Number(previousValue), inputValue, operator);
+      currentValue = normalizeResult(result);
+      previousValue = currentValue === 'Error' ? null : currentValue;
+      if (currentValue === 'Error') {
+        handleError('0では割れません');
+        return;
+      }
+    } else {
+      previousValue = currentValue;
+    }
+
+    operator = nextOperator;
+    waitingForOperand = true;
+    expressionText = `${formatValue(previousValue)} ${getOperatorSymbol(operator)}`;
+    updateDisplay(true);
+  }
+
+  function evaluate() {
+    if (!operator || previousValue === null || currentValue === 'Error') {
+      pulseCalculator();
+      return;
+    }
+
+    const leftText = previousValue;
+    const rightText = currentValue;
+    const selectedOperator = operator;
+    const result = calculate(Number(leftText), Number(rightText), selectedOperator);
+    const normalized = normalizeResult(result);
+
+    if (normalized === 'Error') {
+      handleError('0では割れません');
+      return;
+    }
+
+    expressionText = `${formatValue(leftText)} ${getOperatorSymbol(selectedOperator)} ${formatValue(rightText)} ＝`;
+    currentValue = normalized;
+    previousValue = null;
+    operator = null;
+    waitingForOperand = true;
+
+    updateDisplay(true);
+    triggerMegaEffect();
+  }
+
+  function percent() {
+    if (currentValue === 'Error') return;
+    const percentSource = currentValue;
+    currentValue = normalizeResult(Number(currentValue) / 100);
+    expressionText = `${formatValue(percentSource)} %`;
+    updateDisplay(true);
+    pulseCalculator();
+  }
+
+  function backspace() {
+    if (waitingForOperand || currentValue === 'Error') return;
+    currentValue = currentValue.length > 1 ? currentValue.slice(0, -1) : '0';
+    if (currentValue === '-' || currentValue === '') currentValue = '0';
+    updateExpressionForCurrentInput();
+    updateDisplay();
+  }
+
+  function clearAll(changeTheme = false) {
+    stopFireworks();
+    flashLayer.classList.remove('active', 'firework-flash');
+
+    currentValue = '0';
+    expressionText = '';
+    previousValue = null;
+    operator = null;
+    waitingForOperand = false;
+
+    if (changeTheme) {
+      applyRandomTheme(true);
+    }
+
+    updateDisplay(true);
+    showToast('SYSTEM RESET');
+  }
+
+  function handleError(message) {
+    expressionText = '';
+    currentValue = 'Error';
+    previousValue = null;
+    operator = null;
+    waitingForOperand = true;
+    updateDisplay(true);
+    calculator.classList.remove('shake');
+    void calculator.offsetWidth;
+    calculator.classList.add('shake');
+    showToast(message);
+  }
+
+  function pulseCalculator() {
+    calculator.classList.remove('overdrive');
+    void calculator.offsetWidth;
+    calculator.classList.add('overdrive');
+  }
+
+  function triggerMegaEffect() {
+    pulseCalculator();
+    launchConfetti(120);
+    startFireworks(FIREWORK_LAUNCH_COUNT);
+    flashLayer.classList.remove('active');
+    void flashLayer.offsetWidth;
+    flashLayer.classList.add('active');
+    showToast('FIREWORK CALCULATION!');
+  }
+
+  function showToast(message) {
+    window.clearTimeout(toastTimer);
+    toast.textContent = message;
+    toast.classList.add('show');
+    toastTimer = window.setTimeout(() => toast.classList.remove('show'), 1700);
+  }
+
+  function createRipple(button, event) {
+    const rect = button.getBoundingClientRect();
+    const clientX = event.clientX || rect.left + rect.width / 2;
+    const clientY = event.clientY || rect.top + rect.height / 2;
+    button.style.setProperty('--ripple-x', `${clientX - rect.left}px`);
+    button.style.setProperty('--ripple-y', `${clientY - rect.top}px`);
+    button.classList.remove('ripple');
+    void button.offsetWidth;
+    button.classList.add('ripple');
+  }
+
+  function processButton(button, event = {}) {
+    if (!button) return;
+
+    createRipple(button, event);
+
+    if (button.dataset.number !== undefined) {
+      inputDigit(button.dataset.number);
+    } else if (button.dataset.operator) {
+      chooseOperator(button.dataset.operator);
+    } else {
+      const action = button.dataset.action;
+      if (action === 'clear') clearAll(true);
+      if (action === 'backspace') backspace();
+      if (action === 'percent') percent();
+      if (action === 'decimal') inputDecimal();
+      if (action === 'equals') evaluate();
+    }
+  }
+
+  function applyTheme(theme) {
+    const validTheme = themes.includes(theme) ? theme : 'rainbow';
+    currentTheme = validTheme;
+    document.body.dataset.theme = validTheme === 'rainbow' ? '' : validTheme;
+  }
+
+  function applyRandomTheme(excludeCurrent = false) {
+    const candidates = excludeCurrent && themes.length > 1
+      ? themes.filter(theme => theme !== currentTheme)
+      : themes;
+    const nextTheme = candidates[Math.floor(Math.random() * candidates.length)];
+    applyTheme(nextTheme);
+  }
+
+  keypad.addEventListener('click', event => {
+    const button = event.target.closest('.key');
+    processButton(button, event);
+  });
+
+  document.addEventListener('keydown', event => {
+    const keyMap = {
+      Enter: '[data-action="equals"]',
+      '=': '[data-action="equals"]',
+      Escape: '[data-action="clear"]',
+      Backspace: '[data-action="backspace"]',
+      '.': '[data-action="decimal"]',
+      ',': '[data-action="decimal"]',
+      '%': '[data-action="percent"]',
+      '+': '[data-operator="+"]',
+      '-': '[data-operator="-"]',
+      '*': '[data-operator="*"]',
+      '/': '[data-operator="/"]'
+    };
+
+    let selector = keyMap[event.key];
+    if (/^[0-9]$/.test(event.key)) selector = `[data-number="${event.key}"]`;
+    if (!selector) return;
+
+    event.preventDefault();
+    const button = document.querySelector(selector);
+    if (!button) return;
+
+    button.classList.add('pressed');
+    processButton(button);
+    window.setTimeout(() => button.classList.remove('pressed'), 110);
+  });
+
+  calculator.addEventListener('mousemove', event => {
+    const rect = calculator.getBoundingClientRect();
+    const x = (event.clientX - rect.left) / rect.width - 0.5;
+    const y = (event.clientY - rect.top) / rect.height - 0.5;
+    calculator.style.transform = `perspective(1100px) rotateX(${y * -3}deg) rotateY(${x * 4}deg)`;
+  });
+
+  calculator.addEventListener('mouseleave', () => {
+    calculator.style.transform = '';
+  });
+
+  window.addEventListener('resize', () => {
+    resizeCanvases();
+    if (fireworksAnimationId !== null) stopFireworks();
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) stopFireworks();
+  });
+
+  applyRandomTheme();
+  resizeCanvases();
+  animateParticles();
+  updateDisplay();
+})();

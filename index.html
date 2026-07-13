@@ -1,64 +1,72 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Calculator</title>
-  <!-- This page is served from index.html -->
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NEON BURST CALCULATOR</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Noto+Sans+JP:wght@500;700;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
-
 </head>
 <body>
-  <div id="meteorLayer" class="meteor-layer" aria-hidden="true"></div>
-  <main class="calculator" aria-label="Calculator">
-    <div class="brand">
-      <span>Scratch-inspired</span>
-      <select id="themeSelect" class="theme-select" aria-label="テーマを選択">
-        <option value="0">No.1 Stylish</option>
-        <option value="1">No.2 Minimal</option>
-        <option value="2">No.3 Future</option>
-        <option value="3">No.4 Cafe</option>
-        <option value="4">No.5 Pop</option>
-        <option value="5">No.6 Cool</option>
-        <option value="6">No.7 Luxury</option>
-        <option value="7">No.8 Natural</option>
-        <option value="8">No.9 Gaming</option>
-        <option value="9">No.10 Modern</option>
-      </select>
-    </div>
+  <div class="aurora aurora-one"></div>
+  <div class="aurora aurora-two"></div>
+  <div class="grid-overlay"></div>
+  <canvas id="particleCanvas" aria-hidden="true"></canvas>
+  <canvas id="fireworksCanvas" aria-hidden="true"></canvas>
 
-    <section class="display" aria-live="polite">
-      <div id="expression" class="expression"></div>
-      <div id="result" class="result">0</div>
-    </section>
+  <main class="app-shell">
+    <section class="calculator" id="calculator" aria-label="派手な電卓">
+      <div class="calculator-glow"></div>
 
-    <section class="keys" aria-label="電卓キー">
-      <button class="clear" data-action="clear">C</button>
-      <button class="backspace" data-action="backspace">⌫</button>
-      <button class="operator" data-action="operator" data-value="÷">÷</button>
-      <button class="operator" data-action="operator" data-value="×">×</button>
+      <header class="calculator-header">
+        <div>
+          <p class="eyebrow">MAXIMUM EFFECT MODE</p>
+          <h1>NEON BURST</h1>
+        </div>
+      </header>
 
-      <button class="digit" data-action="digit" data-value="7">7</button>
-      <button class="digit" data-action="digit" data-value="8">8</button>
-      <button class="digit" data-action="digit" data-value="9">9</button>
-      <button class="operator" data-action="operator" data-value="+">+</button>
+      <div class="display-panel" id="displayPanel">
+        <div class="display-scanline"></div>
+        <output class="expression-display" id="expressionDisplay" aria-label="計算履歴"></output>
+        <output class="main-display" id="mainDisplay" aria-live="polite">0</output>
+        <div class="display-meter"><span id="displayMeterBar"></span></div>
+      </div>
 
-      <button class="digit" data-action="digit" data-value="4">4</button>
-      <button class="digit" data-action="digit" data-value="5">5</button>
-      <button class="digit" data-action="digit" data-value="6">6</button>
-      <button class="operator" data-action="operator" data-value="−">−</button>
+      <div class="keypad" id="keypad">
+        <button class="key utility" type="button" data-action="clear"><span>AC</span></button>
+        <button class="key utility" type="button" data-action="backspace"><span>DEL</span></button>
+        <button class="key utility" type="button" data-action="percent"><span>%</span></button>
+        <button class="key operator" type="button" data-operator="/"><span>÷</span></button>
 
-      <button class="digit" data-action="digit" data-value="1">1</button>
-      <button class="digit" data-action="digit" data-value="2">2</button>
-      <button class="digit" data-action="digit" data-value="3">3</button>
-      <button class="decimal" data-action="decimal" data-value=".">.</button>
+        <button class="key number" type="button" data-number="7"><span>7</span></button>
+        <button class="key number" type="button" data-number="8"><span>8</span></button>
+        <button class="key number" type="button" data-number="9"><span>9</span></button>
+        <button class="key operator" type="button" data-operator="*"><span>×</span></button>
 
-      <button class="digit span-2" data-action="digit" data-value="0">0</button>
-      <button class="equal span-2" data-action="equals">=</button>
+        <button class="key number" type="button" data-number="4"><span>4</span></button>
+        <button class="key number" type="button" data-number="5"><span>5</span></button>
+        <button class="key number" type="button" data-number="6"><span>6</span></button>
+        <button class="key operator" type="button" data-operator="-"><span>−</span></button>
+
+        <button class="key number" type="button" data-number="1"><span>1</span></button>
+        <button class="key number" type="button" data-number="2"><span>2</span></button>
+        <button class="key number" type="button" data-number="3"><span>3</span></button>
+        <button class="key operator" type="button" data-operator="+"><span>＋</span></button>
+
+        <button class="key number zero" type="button" data-number="0"><span>0</span></button>
+        <button class="key number" type="button" data-action="decimal"><span>.</span></button>
+        <button class="key equals" type="button" data-action="equals"><span>=</span></button>
+      </div>
+
+      <footer class="keyboard-guide">Keyboard: 0-9 / + - * / / Enter / Esc / Backspace</footer>
     </section>
   </main>
 
-  <script src="script.js"></script>
+  <div id="flashLayer" class="flash-layer" aria-hidden="true"></div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
+  <script src="script.js"></script>
 </body>
 </html>
