@@ -31,7 +31,7 @@
   const FIREWORK_FRAME_INTERVAL = 1000 / 30;
   const FIREWORK_LAUNCH_COUNT = 5; // Equal button: launch exactly five fireworks
   const FIREWORK_LAUNCH_INTERVAL = 1000; // One-second interval between launches
-  const FIREWORK_LAUNCH_ANGLES = [90, 45, 135];
+  const FIREWORK_LAUNCH_ANGLE = 90;
   const FIREWORK_EXPLOSION_SCALE = 3;
   const MAX_FIREWORK_ROCKETS = 4;
   const MAX_FIREWORK_SPARKS = 420;
@@ -194,14 +194,10 @@
     const colors = getThemeColors();
     const color = colors[Math.floor(Math.random() * colors.length)];
     const accentColor = colors[Math.floor(Math.random() * colors.length)];
-    const launchAngle = FIREWORK_LAUNCH_ANGLES[Math.floor(Math.random() * FIREWORK_LAUNCH_ANGLES.length)];
+    const launchAngle = FIREWORK_LAUNCH_ANGLE;
     const launchRadians = launchAngle * Math.PI / 180;
     const launchSpeed = 9.2 + Math.random() * 2.2;
-    const x = launchAngle === 45
-      ? window.innerWidth * (0.08 + Math.random() * 0.22)
-      : launchAngle === 135
-        ? window.innerWidth * (0.7 + Math.random() * 0.22)
-        : window.innerWidth * (0.14 + Math.random() * 0.72);
+    const x = window.innerWidth * (0.14 + Math.random() * 0.72);
 
     fireworkRockets.push({
       x,
@@ -329,6 +325,7 @@
     }
     fireworkRockets.length = 0;
     fireworkSparks.length = 0;
+    particles.length = 0;
     fireworksLaunchedCount = 0;
     fireworksTargetCount = 0;
     nextFireworkTime = 0;
@@ -560,6 +557,7 @@
   function evaluate() {
     if (!operator || previousValue === null || currentValue === 'Error') {
       pulseCalculator();
+      triggerMegaEffect();
       return;
     }
 
@@ -571,6 +569,7 @@
 
     if (normalized === 'Error') {
       handleError('0では割れません');
+      triggerMegaEffect();
       return;
     }
 
@@ -640,6 +639,7 @@
 
   function triggerMegaEffect() {
     pulseCalculator();
+    stopFireworks();
     launchConfetti(120);
     startFireworks(FIREWORK_LAUNCH_COUNT);
     flashLayer.classList.remove('active');
