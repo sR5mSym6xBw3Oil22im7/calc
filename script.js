@@ -8,6 +8,12 @@
   const calculator = document.getElementById('calculator');
   const flashLayer = document.getElementById('flashLayer');
   const toast = document.getElementById('toast');
+  const voicePanel = document.getElementById('voicePanel');
+  const voiceButton = document.getElementById('voiceButton');
+  const voiceButtonLabel = document.getElementById('voiceButtonLabel');
+  const voiceState = document.getElementById('voiceState');
+  const voiceStatus = document.getElementById('voiceStatus');
+  const voiceTranscript = document.getElementById('voiceTranscript');
   const particleCanvas = document.getElementById('particleCanvas');
   const particleContext = particleCanvas.getContext('2d');
   const fireworksCanvas = document.getElementById('fireworksCanvas');
@@ -27,6 +33,10 @@
   let nextFireworkTime = 0;
   let fireworksAnimationId = null;
   let lastFireworksFrame = 0;
+  let voiceRecognition = null;
+  let voiceRecognitionActive = false;
+  let voiceFinalTranscript = '';
+  let voiceResetTimer = null;
 
   const FIREWORK_FRAME_INTERVAL = 1000 / 30;
   const FIREWORK_LAUNCH_COUNT = 5; // Equal button: launch exactly five fireworks
@@ -685,6 +695,232 @@
     }
   }
 
+  const voiceStateText = {
+      IDLE: ['READY', 'マイクを押して話してください'],
+      REQUESTING: ['REQUESTING', 'マイクの使用許可を確認しています'],
+      LISTENING: ['LISTENING', '認識中…'],
+      PROCESSING: ['PROCESSING', '音声を解析しています…'],
+      SUCCESS: ['SUCCESS', '認識しました'],
+      ERROR: ['ERROR', '音声入力でエラーが発生しました'],
+      UNSUPPORTED: ['UNSUPPORTED', 'この環境では音声入力を利用できません']
+    };
+
+  function setVoiceState(nextState, message = null) {
+      const [label, defaultMessage] = voiceStateText[nextState];
+      voicePanel.className = `voice-panel is-${nextState.toLowerCase()}`;
+      voiceState.textContent = label;
+      voiceStatus.textContent = message || defaultMessage;
+      const listening = nextState === 'LISTENING' || nextState === 'REQUESTING';
+      voiceButton.classList.toggle('is-listening', listening);
+      voiceButton.setAttribute('aria-pressed', String(listening));
+      voiceButtonLabel.textContent = listening ? '停止' : '音声入力';
+      voiceButton.setAttribute('aria-label', listening ? '音声入力を停止' : '音声入力を開始');
+    }
+
+  function setVoiceTranscript(text) {
+      voiceTranscript.textContent = `認識: ${text || '—'}`;
+    }
+
+  function normalizeVoiceText(text) {
+      let normalized = text
+        .normalize('NFKC')
+        .replace(/[、。,.!?！？「」『』]/g, '')
+        .replace(/\s+/g, '');
+
+      const replacements = [
+        ['じゅういち', '11'], ['じゅうに', '12'], ['じゅうさん', '13'], ['じゅうよん', '14'],
+        ['じゅうご', '15'], ['じゅうろく', '16'], ['じゅうなな', '17'], ['じゅうはち', '18'],
+        ['じゅうきゅう', '19'], ['じゅう', '10'],
+        ['れい', '0'], ['ぜろ', '0'], ['いち', '1'], ['に', '2'], ['さん', '3'],
+        ['よん', '4'], ['し', '4'], ['ご', '5'], ['ろく', '6'], ['なな', '7'],
+        ['しち', '7'], ['はち', '8'], ['きゅう', '9'],
+        ['ac', 'AC'], ['del', 'DEL'],
+        ['オールクリア', 'AC'], ['クリア', 'AC'], ['リセット', 'AC'],
+        ['一文字削除', 'DEL'], ['削除', 'DEL'],
+        ['パーセント', '%'], ['イコール', '='], ['計算して', '='], ['計算', '='], ['結果', '='],
+        ['プラス', '+'], ['足す', '+'], ['たす', '+'],
+        ['マイナス', '-'], ['引く', '-'], ['ひく', '-'],
+        ['かける', '*'], ['掛ける', '*'], ['乗算', '*'],
+        ['わる', '/'], ['割る', '/'], ['除算', '/'],
+        ['ドット', '.'], ['てん', '.'], ['点', '.'],
+        ['％', '%'], ['＋', '+'], ['−', '-'], ['×', '*'], ['÷', '/'], ['＝', '=']
+      ];
+      replacements.forEach(([from, to]) => {
+        normalized = normalized.split(from).join(to);
+      });
+      return normalized.replace(/(AC|DEL|[+\-*\/%=])/g, '$1');
+    }
+
+  function parseJapaneseNumber(text) {
+      const smallDigits = { '零': 0, '〇': 0, '一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9 };
+      const units = { '十': 10, '百': 100, '千': 1000 };
+      if (!/^[零〇一二三四五六七八九十百千]+$/.test(text)) return text;
+      let total = 0;
+      let section = 0;
+      let digit = 0;
+      for (const character of text) {
+        if (smallDigits[character] !== undefined) {
+          digit = smallDigits[character];
+        } else if (units[character]) {
+          section += (digit || 1) * units[character];
+          digit = 0;
+        }
+      }
+      return String(total + section + digit);
+    }
+
+  function parseVoiceCommand(rawText) {
+      const normalized = normalizeVoiceText(rawText);
+      if (['AC', 'DEL', '%', '='].includes(normalized)) return { type: 'action', action: normalized };
+
+      const numericText = normalized.replace(/[零〇一二三四五六七八九十百千]+/g, match => parseJapaneseNumber(match));
+      const expressionMatch = numericText.match(/^(\d+(?:\.\d+)?)([+\-*\/])(\d+(?:\.\d+)?)(=)?$/);
+      if (expressionMatch) {
+        return {
+          type: 'expression',
+          left: expressionMatch[1],
+          operator: expressionMatch[2],
+          right: expressionMatch[3],
+          evaluate: Boolean(expressionMatch[4])
+        };
+      }
+      if (/^\d+(?:\.\d+)?$/.test(numericText)) return { type: 'number', value: numericText };
+      return null;
+    }
+
+  function inputVoiceNumber(value) {
+      for (const character of value) {
+        if (character === '.') inputDecimal();
+        else inputDigit(character);
+      }
+    }
+
+  function executeVoiceCommand(rawText) {
+      const command = parseVoiceCommand(rawText);
+      if (!command) {
+        setVoiceState('ERROR', '計算として解釈できませんでした');
+        return false;
+      }
+      if (command.type === 'action') {
+        if (command.action === 'AC') clearAll(true);
+        if (command.action === 'DEL') backspace();
+        if (command.action === '%') percent();
+        if (command.action === '=') evaluate();
+        return true;
+      }
+      if (command.type === 'number') {
+        inputVoiceNumber(command.value);
+        return true;
+      }
+
+      clearAll(false);
+      inputVoiceNumber(command.left);
+      chooseOperator(command.operator);
+      inputVoiceNumber(command.right);
+      if (command.evaluate) evaluate();
+      return true;
+    }
+
+  function voiceErrorMessage(error) {
+      const messages = {
+        'not-allowed': 'マイクの使用が許可されていません',
+        'service-not-allowed': '音声認識サービスを利用できません',
+        'audio-capture': '利用可能なマイクが見つかりません',
+        'no-speech': '音声を認識できませんでした',
+        network: '音声認識サービスに接続できません',
+        aborted: '音声入力を終了しました'
+      };
+      return messages[error] || '音声入力でエラーが発生しました';
+    }
+
+  function initializeVoiceInput() {
+      const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!Recognition) {
+        voiceButton.disabled = true;
+        setVoiceState('UNSUPPORTED');
+        return;
+      }
+
+      voiceRecognition = new Recognition();
+      voiceRecognition.lang = 'ja-JP';
+      voiceRecognition.continuous = false;
+      voiceRecognition.interimResults = true;
+      voiceRecognition.maxAlternatives = 1;
+
+      voiceRecognition.onstart = () => {
+        voiceRecognitionActive = true;
+        setVoiceState('LISTENING');
+      };
+
+      voiceRecognition.onresult = event => {
+        let interim = '';
+        for (let index = event.resultIndex; index < event.results.length; index += 1) {
+          const transcript = event.results[index][0].transcript;
+          if (event.results[index].isFinal) voiceFinalTranscript += transcript;
+          else interim += transcript;
+        }
+        setVoiceTranscript(voiceFinalTranscript || interim);
+        if (voiceFinalTranscript) {
+          setVoiceState('PROCESSING');
+          const succeeded = executeVoiceCommand(voiceFinalTranscript);
+          if (succeeded) {
+            setVoiceState('SUCCESS');
+            window.clearTimeout(voiceResetTimer);
+            voiceResetTimer = window.setTimeout(() => setVoiceState('IDLE'), 2200);
+          }
+          voiceFinalTranscript = '';
+        }
+      };
+
+      voiceRecognition.onerror = event => {
+        const message = voiceErrorMessage(event.error);
+        setVoiceState(event.error === 'aborted' ? 'IDLE' : 'ERROR', message);
+        if (event.error !== 'aborted') {
+          window.clearTimeout(voiceResetTimer);
+          voiceResetTimer = window.setTimeout(() => setVoiceState('IDLE'), 4000);
+        }
+      };
+
+      voiceRecognition.onend = () => {
+        voiceRecognitionActive = false;
+        if (voicePanel.classList.contains('is-listening') || voicePanel.classList.contains('is-requesting')) {
+          setVoiceState('IDLE');
+        }
+      };
+
+      voiceButton.addEventListener('click', () => {
+        if (voiceRecognitionActive) {
+          voiceRecognition.stop();
+          return;
+        }
+        window.clearTimeout(voiceResetTimer);
+        voiceFinalTranscript = '';
+        setVoiceTranscript('');
+        setVoiceState('REQUESTING');
+        try {
+          voiceRecognition.start();
+        } catch (error) {
+          voiceRecognitionActive = false;
+          setVoiceState('ERROR', '音声入力を開始できませんでした');
+        }
+      });
+  }
+
+  function isGoogleChrome() {
+      const userAgent = navigator.userAgent;
+      const isChrome = /Chrome\/|CriOS\//.test(userAgent);
+      const isOtherChromiumBrowser = /Edg\/|OPR\/|Opera\/|SamsungBrowser\//.test(userAgent);
+      return isChrome && !isOtherChromiumBrowser;
+  }
+
+  function setupVoiceInputForBrowser() {
+      if (!isGoogleChrome()) {
+        voicePanel.hidden = true;
+        return;
+      }
+      initializeVoiceInput();
+  }
+
   function applyTheme(theme) {
     const validTheme = themes.includes(theme) ? theme : 'rainbow';
     currentTheme = validTheme;
@@ -753,6 +989,7 @@
   });
 
   applyRandomTheme();
+  setupVoiceInputForBrowser();
   resizeCanvases();
   animateParticles();
   updateDisplay();
