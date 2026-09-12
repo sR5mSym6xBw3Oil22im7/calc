@@ -36,7 +36,12 @@
   let voiceRecognition = null;
   let voiceRecognitionActive = false;
   let voiceFinalTranscript = '';
-  let voiceResetTimer = null;
+  let voiceInactivityTimer = null;
+  let voiceTranscriptResetTimer = null;
+  let voiceErrorResetTimer = null;
+  let currentVoiceState = 'IDLE';
+  let voiceStopRequested = false;
+  const VOICE_INACTIVITY_TIMEOUT = 30000;
 
   const FIREWORK_FRAME_INTERVAL = 1000 / 30;
   const FIREWORK_LAUNCH_COUNT = 5; // Equal button: launch exactly five fireworks
@@ -687,7 +692,10 @@
       chooseOperator(button.dataset.operator);
     } else {
       const action = button.dataset.action;
-      if (action === 'clear') clearAll(true);
+      if (action === 'clear') {
+        resetVoiceInput();
+        clearAll(true);
+      }
       if (action === 'backspace') backspace();
       if (action === 'percent') percent();
       if (action === 'decimal') inputDecimal();
@@ -707,6 +715,8 @@
 
   function setVoiceState(nextState, message = null) {
       const [label, defaultMessage] = voiceStateText[nextState];
+      currentVoiceState = nextState;
+      window.clearTimeout(voiceErrorResetTimer);
       voicePanel.className = `voice-panel is-${nextState.toLowerCase()}`;
       voiceState.textContent = label;
       voiceStatus.textContent = message || defaultMessage;
@@ -715,17 +725,80 @@
       voiceButton.setAttribute('aria-pressed', String(listening));
       voiceButtonLabel.textContent = listening ? '停止' : '音声入力';
       voiceButton.setAttribute('aria-label', listening ? '音声入力を停止' : '音声入力を開始');
+      if (nextState === 'ERROR') {
+        voiceErrorResetTimer = window.setTimeout(() => {
+          setVoiceTranscript('');
+          setVoiceState('IDLE');
+        }, 3000);
+      }
     }
 
   function setVoiceTranscript(text) {
       voiceTranscript.textContent = `認識: ${text || '—'}`;
     }
 
+  function resetVoiceInput() {
+      window.clearTimeout(voiceInactivityTimer);
+      window.clearTimeout(voiceTranscriptResetTimer);
+      voiceStopRequested = true;
+      if (voiceRecognitionActive && voiceRecognition) {
+        voiceRecognition.stop();
+      }
+      voiceRecognitionActive = false;
+      voiceFinalTranscript = '';
+      setVoiceTranscript('');
+      setVoiceState('IDLE');
+    }
+
+  function scheduleVoiceTranscriptReset() {
+      window.clearTimeout(voiceTranscriptResetTimer);
+      voiceTranscriptResetTimer = window.setTimeout(() => {
+        setVoiceTranscript('');
+      }, 1000);
+    }
+
+  function prepareVoiceSession() {
+      window.clearTimeout(voiceTranscriptResetTimer);
+      voiceFinalTranscript = '';
+      setVoiceTranscript('');
+    }
+
+  function resetVoiceInactivityTimer() {
+      window.clearTimeout(voiceInactivityTimer);
+      voiceInactivityTimer = window.setTimeout(() => {
+        setVoiceState('IDLE');
+      }, VOICE_INACTIVITY_TIMEOUT);
+    }
+
   function normalizeVoiceText(text) {
       let normalized = text
         .normalize('NFKC')
-        .replace(/[、。,.!?！？「」『』]/g, '')
-        .replace(/\s+/g, '');
+        .replace(/[、。,!?！？「」『』]/g, '')
+        .replace(/\s+/g, '')
+        .replace(/は$/, '');
+      const spokenDigits = {
+        れい: 0, ぜろ: 0, いち: 1, に: 2, さん: 3, よん: 4, し: 4,
+        ご: 5, ろく: 6, なな: 7, しち: 7, はち: 8, きゅう: 9
+      };
+      const parseSpokenInteger = value => {
+        if (spokenDigits[value] !== undefined) return String(spokenDigits[value]);
+        if (value === 'じゅう') return '10';
+        const tensMatch = value.match(/^(いち|に|さん|よん|し|ご|ろく|なな|しち|はち|きゅう)?じゅう(れい|ぜろ|いち|に|さん|よん|し|ご|ろく|なな|しち|はち|きゅう)?$/);
+        if (!tensMatch) return value;
+        const tens = tensMatch[1] ? spokenDigits[tensMatch[1]] * 10 : 10;
+        const ones = tensMatch[2] ? spokenDigits[tensMatch[2]] : 0;
+        return String(tens + ones);
+      };
+      normalized = normalized.replace(
+        /(いち|に|さん|よん|し|ご|ろく|なな|しち|はち|きゅう)?じゅう(れい|ぜろ|いち|に|さん|よん|し|ご|ろく|なな|しち|はち|きゅう)?てん(れい|ぜろ|いち|に|さん|よん|し|ご|ろく|なな|しち|はち|きゅう)/g,
+        (_, tensDigit, onesDigit, decimalDigit) => `${parseSpokenInteger(`${tensDigit || ''}じゅう${onesDigit || ''}`)}.${spokenDigits[decimalDigit]}`
+      );
+      normalized = normalized.replace(
+        /(れい|ぜろ|いち|に|さん|よん|し|ご|ろく|なな|しち|はち|きゅう)てん(れい|ぜろ|いち|に|さん|よん|し|ご|ろく|なな|しち|はち|きゅう)/g,
+        (_, integerDigit, decimalDigit) => `${spokenDigits[integerDigit]}.${spokenDigits[decimalDigit]}`
+      );
+      // Treat every remaining spoken decimal marker as a period.
+      normalized = normalized.replace(/てん|点/g, '.');
 
       const replacements = [
         ['じゅういち', '11'], ['じゅうに', '12'], ['じゅうさん', '13'], ['じゅうよん', '14'],
@@ -742,7 +815,7 @@
         ['マイナス', '-'], ['引く', '-'], ['ひく', '-'],
         ['かける', '*'], ['掛ける', '*'], ['乗算', '*'],
         ['わる', '/'], ['割る', '/'], ['除算', '/'],
-        ['ドット', '.'], ['てん', '.'], ['点', '.'],
+        ['ドット', '.'],
         ['％', '%'], ['＋', '+'], ['−', '-'], ['×', '*'], ['÷', '/'], ['＝', '=']
       ];
       replacements.forEach(([from, to]) => {
@@ -774,6 +847,16 @@
       if (['AC', 'DEL', '%', '='].includes(normalized)) return { type: 'action', action: normalized };
 
       const numericText = normalized.replace(/[零〇一二三四五六七八九十百千]+/g, match => parseJapaneseNumber(match));
+      const hasEvaluationMarker = /(?:=|＝|イコール|計算して|計算|結果)\s*$/.test(rawText);
+      const relativeExpressionMatch = numericText.match(/^([+\-*\/])(\d+(?:\.\d+)?)(=)?$/);
+      if (relativeExpressionMatch) {
+        return {
+          type: 'relative-expression',
+          operator: relativeExpressionMatch[1],
+          right: relativeExpressionMatch[2],
+          evaluate: Boolean(relativeExpressionMatch[3]) || hasEvaluationMarker
+        };
+      }
       const expressionMatch = numericText.match(/^(\d+(?:\.\d+)?)([+\-*\/])(\d+(?:\.\d+)?)(=)?$/);
       if (expressionMatch) {
         return {
@@ -781,18 +864,53 @@
           left: expressionMatch[1],
           operator: expressionMatch[2],
           right: expressionMatch[3],
-          evaluate: Boolean(expressionMatch[4])
+          evaluate: Boolean(expressionMatch[4]) || hasEvaluationMarker
         };
       }
       if (/^\d+(?:\.\d+)?$/.test(numericText)) return { type: 'number', value: numericText };
       return null;
     }
 
-  function inputVoiceNumber(value) {
-      for (const character of value) {
-        if (character === '.') inputDecimal();
-        else inputDigit(character);
+  function inputVoiceNumber(value, glowDelay = 0) {
+      [...value].forEach((character, index) => {
+        const characterDelay = glowDelay + index * 1000;
+        if (character === '.') {
+          activateVoiceKey('[data-action="decimal"]', characterDelay);
+          inputDecimal();
+        } else {
+          activateVoiceKey(`[data-number="${character}"]`, characterDelay);
+          inputDigit(character);
+        }
+      });
+      return [...value].length;
+    }
+
+  function activateVoiceKey(selector, delay = 0) {
+      const activate = () => {
+        const key = document.querySelector(selector);
+        if (!key) return;
+        key.classList.remove('voice-active');
+        void key.offsetWidth;
+        key.classList.add('voice-active');
+        window.setTimeout(() => key.classList.remove('voice-active'), 520);
+      };
+      if (delay > 0) {
+        window.setTimeout(activate, delay);
+        return;
       }
+      const key = document.querySelector(selector);
+      if (!key) return;
+      key.classList.remove('voice-active');
+      void key.offsetWidth;
+      key.classList.add('voice-active');
+      window.setTimeout(() => key.classList.remove('voice-active'), 520);
+    }
+
+  function activateVoiceAction(action, delay = 0) {
+      if (action === 'AC') activateVoiceKey('[data-action="clear"]', delay);
+      if (action === 'DEL') activateVoiceKey('[data-action="backspace"]', delay);
+      if (action === '%') activateVoiceKey('[data-action="percent"]', delay);
+      if (action === '=') activateVoiceKey('button[data-action="equals"]', delay);
     }
 
   function executeVoiceCommand(rawText) {
@@ -802,22 +920,49 @@
         return false;
       }
       if (command.type === 'action') {
+        activateVoiceAction(command.action);
         if (command.action === 'AC') clearAll(true);
         if (command.action === 'DEL') backspace();
         if (command.action === '%') percent();
-        if (command.action === '=') evaluate();
+        if (command.action === '=') {
+          evaluate();
+          scheduleVoiceTranscriptReset();
+        }
         return true;
       }
       if (command.type === 'number') {
+        // inputDigit/inputDecimal start a fresh value after a completed evaluation.
         inputVoiceNumber(command.value);
+        return true;
+      }
+      if (command.type === 'relative-expression') {
+        const rightDelay = 1000;
+        activateVoiceKey(`[data-operator="${command.operator}"]`, 0);
+        chooseOperator(command.operator);
+        const rightLength = inputVoiceNumber(command.right, rightDelay);
+        if (command.evaluate) {
+          activateVoiceKey('button[data-action="equals"]', rightDelay + rightLength * 1000);
+          evaluate();
+          scheduleVoiceTranscriptReset();
+        }
+        if (currentValue === 'Error') {
+          handleError('音声コマンドを計算できませんでした');
+        }
         return true;
       }
 
       clearAll(false);
-      inputVoiceNumber(command.left);
+      const leftLength = inputVoiceNumber(command.left, 0);
+      const operatorDelay = leftLength * 1000;
+      activateVoiceKey(`[data-operator="${command.operator}"]`, operatorDelay);
       chooseOperator(command.operator);
-      inputVoiceNumber(command.right);
-      if (command.evaluate) evaluate();
+      const rightDelay = operatorDelay + 1000;
+      const rightLength = inputVoiceNumber(command.right, rightDelay);
+      if (command.evaluate) {
+        activateVoiceKey('button[data-action="equals"]', rightDelay + rightLength * 1000);
+        evaluate();
+        scheduleVoiceTranscriptReset();
+      }
       return true;
     }
 
@@ -843,13 +988,15 @@
 
       voiceRecognition = new Recognition();
       voiceRecognition.lang = 'ja-JP';
-      voiceRecognition.continuous = false;
+      voiceRecognition.continuous = true;
       voiceRecognition.interimResults = true;
       voiceRecognition.maxAlternatives = 1;
 
       voiceRecognition.onstart = () => {
         voiceRecognitionActive = true;
+        voiceStopRequested = false;
         setVoiceState('LISTENING');
+        resetVoiceInactivityTimer();
       };
 
       voiceRecognition.onresult = event => {
@@ -864,39 +1011,38 @@
           setVoiceState('PROCESSING');
           const succeeded = executeVoiceCommand(voiceFinalTranscript);
           if (succeeded) {
-            setVoiceState('SUCCESS');
-            window.clearTimeout(voiceResetTimer);
-            voiceResetTimer = window.setTimeout(() => setVoiceState('IDLE'), 2200);
+            setVoiceState('LISTENING');
           }
           voiceFinalTranscript = '';
         }
+        resetVoiceInactivityTimer();
       };
 
       voiceRecognition.onerror = event => {
         const message = voiceErrorMessage(event.error);
-        setVoiceState(event.error === 'aborted' ? 'IDLE' : 'ERROR', message);
-        if (event.error !== 'aborted') {
-          window.clearTimeout(voiceResetTimer);
-          voiceResetTimer = window.setTimeout(() => setVoiceState('IDLE'), 4000);
-        }
+        setVoiceState('ERROR', message);
+        resetVoiceInactivityTimer();
       };
 
       voiceRecognition.onend = () => {
         voiceRecognitionActive = false;
-        if (voicePanel.classList.contains('is-listening') || voicePanel.classList.contains('is-requesting')) {
+        if (voiceStopRequested) {
+          voiceStopRequested = false;
           setVoiceState('IDLE');
         }
+        resetVoiceInactivityTimer();
       };
 
       voiceButton.addEventListener('click', () => {
         if (voiceRecognitionActive) {
+          voiceStopRequested = true;
           voiceRecognition.stop();
           return;
         }
-        window.clearTimeout(voiceResetTimer);
-        voiceFinalTranscript = '';
-        setVoiceTranscript('');
+        window.clearTimeout(voiceInactivityTimer);
+        prepareVoiceSession();
         setVoiceState('REQUESTING');
+        voiceStopRequested = false;
         try {
           voiceRecognition.start();
         } catch (error) {
