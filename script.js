@@ -802,7 +802,7 @@
   function unlockCalculatorInput() {
     calculatorInputLocked = false;
     voiceEvaluationPending = false;
-    if (!voiceRecognition) return;
+    if (!voiceRecognition || !voiceListeningRequested) return;
 
     voiceButton.disabled = false;
     setVoiceState('LISTENING');
@@ -819,6 +819,15 @@
     if (calculatorInputLocked) return;
     voiceEvaluationPending = true;
     lockCalculatorInputUntilFireworksComplete();
+  }
+
+  function handleVoiceInputError(message) {
+    calculatorInputLocked = false;
+    voiceEvaluationPending = false;
+    resetVoiceInput();
+    clearAll(true);
+    if (voiceRecognition) voiceButton.disabled = false;
+    setVoiceState('ERROR', message);
   }
 
   function resetVoiceInput() {
@@ -897,8 +906,7 @@
         scheduleVoiceRecognitionRestart();
         return;
       }
-      voiceListeningRequested = false;
-      setVoiceState('ERROR', '音声入力を開始できませんでした');
+      handleVoiceInputError('音声入力を開始できませんでした');
     }
   }
 
@@ -1065,7 +1073,7 @@
       clearVoiceFeedback();
       const command = parseVoiceCommand(rawText);
       if (!command) {
-        setVoiceState('ERROR', '計算として解釈できませんでした');
+        handleVoiceInputError('計算として解釈できませんでした');
         return false;
       }
       if (command.type === 'action') {
@@ -1197,8 +1205,7 @@
         if (['not-allowed', 'service-not-allowed', 'audio-capture'].includes(event.error)) {
           voiceListeningRequested = false;
         }
-        setVoiceState('ERROR', message);
-        resetVoiceInactivityTimer();
+        handleVoiceInputError(message);
       };
 
       voiceRecognition.onend = () => {
@@ -1241,8 +1248,7 @@
           })
           .catch(() => {
             if (!voiceListeningRequested) return;
-            voiceListeningRequested = false;
-            setVoiceState('ERROR', 'マイクの使用を開始できませんでした');
+            handleVoiceInputError('マイクの使用を開始できませんでした');
           });
       });
   }
