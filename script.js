@@ -48,9 +48,11 @@
   let voiceMicrophoneStream = null;
   let voicePermissionRequest = null;
   let voiceEvaluationPending = false;
+  let voiceErrorDisplayed = false;
   let calculatorInputLocked = false;
   const VOICE_INACTIVITY_TIMEOUT = 30000;
   const VOICE_RESTART_DELAY = 100;
+  const VOICE_ERROR_MESSAGE = '音声入力でエラーが発生しました';
 
   const FIREWORK_FRAME_INTERVAL = 1000 / 30;
   const FIREWORK_LAUNCH_COUNT = 5; // Equal button: launch exactly five fireworks
@@ -736,6 +738,7 @@
       const [label, defaultMessage] = voiceStateText[nextState];
       currentVoiceState = nextState;
       window.clearTimeout(voiceErrorResetTimer);
+      if (nextState !== 'ERROR') voiceErrorDisplayed = false;
       voicePanel.className = `voice-panel is-${nextState.toLowerCase()}`;
       voiceState.textContent = label;
       voiceStatus.textContent = message || defaultMessage;
@@ -745,7 +748,9 @@
       voiceButtonLabel.textContent = listening ? '停止' : '音声入力';
       voiceButton.setAttribute('aria-label', listening ? '音声入力を停止' : '音声入力を開始');
       if (nextState === 'ERROR') {
+        voiceErrorDisplayed = true;
         voiceErrorResetTimer = window.setTimeout(() => {
+          voiceErrorDisplayed = false;
           setVoiceTranscript('');
           setVoiceState('IDLE');
         }, 3000);
@@ -802,6 +807,7 @@
   function unlockCalculatorInput() {
     calculatorInputLocked = false;
     voiceEvaluationPending = false;
+    if (voiceErrorDisplayed) return;
     if (!voiceRecognition || !voiceListeningRequested) return;
 
     voiceButton.disabled = false;
@@ -821,13 +827,13 @@
     lockCalculatorInputUntilFireworksComplete();
   }
 
-  function handleVoiceInputError(message) {
+  function handleVoiceInputError() {
     calculatorInputLocked = false;
     voiceEvaluationPending = false;
     resetVoiceInput();
     clearAll(true);
     if (voiceRecognition) voiceButton.disabled = false;
-    setVoiceState('ERROR', message);
+    setVoiceState('ERROR', VOICE_ERROR_MESSAGE);
   }
 
   function resetVoiceInput() {
@@ -866,7 +872,7 @@
   function resetVoiceInactivityTimer() {
       window.clearTimeout(voiceInactivityTimer);
       voiceInactivityTimer = window.setTimeout(() => {
-        if (!calculatorInputLocked) setVoiceState('IDLE');
+        if (!calculatorInputLocked && !voiceErrorDisplayed) setVoiceState('IDLE');
       }, VOICE_INACTIVITY_TIMEOUT);
     }
 
@@ -906,7 +912,7 @@
         scheduleVoiceRecognitionRestart();
         return;
       }
-      handleVoiceInputError('音声入力を開始できませんでした');
+      handleVoiceInputError();
     }
   }
 
@@ -1073,7 +1079,7 @@
       clearVoiceFeedback();
       const command = parseVoiceCommand(rawText);
       if (!command) {
-        handleVoiceInputError('計算として解釈できませんでした');
+        handleVoiceInputError();
         return false;
       }
       if (command.type === 'action') {
@@ -1133,18 +1139,6 @@
       return true;
     }
 
-  function voiceErrorMessage(error) {
-      const messages = {
-        'not-allowed': 'マイクの使用が許可されていません',
-        'service-not-allowed': '音声認識サービスを利用できません',
-        'audio-capture': '利用可能なマイクが見つかりません',
-        'no-speech': '音声を認識できませんでした',
-        network: '音声認識サービスに接続できません',
-        aborted: '音声入力を終了しました'
-      };
-      return messages[error] || '音声入力でエラーが発生しました';
-    }
-
   function initializeVoiceInput() {
       const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!Recognition) {
@@ -1172,7 +1166,7 @@
       };
 
       voiceRecognition.onresult = event => {
-        if (calculatorInputLocked && !voiceEvaluationPending) return;
+        if (voiceErrorDisplayed || (calculatorInputLocked && !voiceEvaluationPending)) return;
         let interim = '';
         let hasFinalResult = false;
         for (let index = event.resultIndex; index < event.results.length; index += 1) {
@@ -1199,18 +1193,14 @@
         resetVoiceInactivityTimer();
       };
 
-      voiceRecognition.onerror = event => {
-        if (calculatorInputLocked) return;
-        const message = voiceErrorMessage(event.error);
-        if (['not-allowed', 'service-not-allowed', 'audio-capture'].includes(event.error)) {
-          voiceListeningRequested = false;
-        }
-        handleVoiceInputError(message);
+      voiceRecognition.onerror = () => {
+        handleVoiceInputError();
       };
 
       voiceRecognition.onend = () => {
         voiceRecognitionActive = false;
         voiceRecognitionStartPending = false;
+        if (voiceErrorDisplayed) return;
         if (voiceStopRequested) {
           voiceStopRequested = false;
         }
@@ -1248,7 +1238,7 @@
           })
           .catch(() => {
             if (!voiceListeningRequested) return;
-            handleVoiceInputError('マイクの使用を開始できませんでした');
+            handleVoiceInputError();
           });
       });
   }
