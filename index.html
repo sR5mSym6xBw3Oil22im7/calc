@@ -34,6 +34,28 @@
         <div class="display-meter"><span id="displayMeterBar"></span></div>
       </div>
 
+      <section class="voice-panel" id="voicePanel" aria-label="音声入力">
+        <div class="voice-header">
+          <span class="voice-title">VOICE INPUT</span>
+          <span class="voice-state" id="voiceState">READY</span>
+        </div>
+        <button
+          class="voice-button"
+          id="voiceButton"
+          type="button"
+          aria-label="音声入力を開始"
+          aria-pressed="false"
+        >
+          <span aria-hidden="true">🎙</span>
+          <span id="voiceButtonLabel">音声入力</span>
+        </button>
+        <p class="voice-status" id="voiceStatus" role="status" aria-live="polite">
+          マイクを押して話してください
+        </p>
+        <p class="voice-hint">例: 「12たす3イコール」</p>
+        <output class="voice-transcript" id="voiceTranscript" aria-label="認識結果">認識: —</output>
+      </section>
+
       <div class="keypad" id="keypad">
         <button class="key utility" type="button" data-action="clear"><span>AC</span></button>
         <button class="key utility" type="button" data-action="backspace"><span>DEL</span></button>
