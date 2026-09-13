@@ -42,8 +42,15 @@
   let voiceErrorResetTimer = null;
   let currentVoiceState = 'IDLE';
   let voiceStopRequested = false;
+  let voiceListeningRequested = false;
+  let voiceRecognitionStartPending = false;
+  let voiceRestartTimer = null;
+  let voiceMicrophoneStream = null;
+  let voicePermissionRequest = null;
+  let voiceEvaluationPending = false;
   let calculatorInputLocked = false;
   const VOICE_INACTIVITY_TIMEOUT = 30000;
+  const VOICE_RESTART_DELAY = 100;
 
   const FIREWORK_FRAME_INTERVAL = 1000 / 30;
   const FIREWORK_LAUNCH_COUNT = 5; // Equal button: launch exactly five fireworks
@@ -67,6 +74,7 @@
   const ambientParticles = [];
   const fireworkRockets = [];
   const fireworkSparks = [];
+  const voiceFeedbackTimers = new Set();
 
   const themes = [
     'rainbow',
@@ -748,23 +756,81 @@
       voiceTranscript.textContent = `認識: ${text || '—'}`;
     }
 
+  function scheduleVoiceFeedback(callback, delay) {
+    let timerId = null;
+    timerId = window.setTimeout(() => {
+      voiceFeedbackTimers.delete(timerId);
+      callback();
+    }, delay);
+    voiceFeedbackTimers.add(timerId);
+  }
+
+  function clearVoiceFeedback() {
+    voiceFeedbackTimers.forEach(timerId => window.clearTimeout(timerId));
+    voiceFeedbackTimers.clear();
+    document.querySelectorAll('.voice-active').forEach(key => key.classList.remove('voice-active'));
+  }
+
+  function hasLiveVoiceMicrophoneStream() {
+    return voiceMicrophoneStream
+      && voiceMicrophoneStream.getTracks().some(track => track.readyState === 'live');
+  }
+
+  function ensureVoiceMicrophoneAccess() {
+    if (hasLiveVoiceMicrophoneStream() || !navigator.mediaDevices
+      || typeof navigator.mediaDevices.getUserMedia !== 'function') {
+      return Promise.resolve();
+    }
+    if (voicePermissionRequest) return voicePermissionRequest;
+
+    voicePermissionRequest = navigator.mediaDevices.getUserMedia({ audio: true })
+      .then(stream => {
+        voiceMicrophoneStream = stream;
+      })
+      .finally(() => {
+        voicePermissionRequest = null;
+      });
+    return voicePermissionRequest;
+  }
+
+  function releaseVoiceMicrophoneAccess() {
+    if (!voiceMicrophoneStream) return;
+    voiceMicrophoneStream.getTracks().forEach(track => track.stop());
+    voiceMicrophoneStream = null;
+  }
+
   function unlockCalculatorInput() {
     calculatorInputLocked = false;
-    if (voiceRecognition) voiceButton.disabled = false;
-    if (currentVoiceState === 'LOCKED') setVoiceState('IDLE');
+    voiceEvaluationPending = false;
+    if (!voiceRecognition) return;
+
+    voiceButton.disabled = false;
+    setVoiceState('LISTENING');
+    startVoiceRecognition();
   }
 
   function lockCalculatorInputUntilFireworksComplete() {
     calculatorInputLocked = true;
     voiceButton.disabled = true;
-    voiceStopRequested = true;
-    if (voiceRecognitionActive && voiceRecognition) voiceRecognition.stop();
     setVoiceState('LOCKED');
+  }
+
+  function lockForSpokenEvaluation() {
+    if (calculatorInputLocked) return;
+    voiceEvaluationPending = true;
+    lockCalculatorInputUntilFireworksComplete();
   }
 
   function resetVoiceInput() {
       window.clearTimeout(voiceInactivityTimer);
       window.clearTimeout(voiceTranscriptResetTimer);
+      clearVoiceFeedback();
+      voiceListeningRequested = false;
+      voiceEvaluationPending = false;
+      releaseVoiceMicrophoneAccess();
+      window.clearTimeout(voiceRestartTimer);
+      voiceRestartTimer = null;
+      voiceRecognitionStartPending = false;
       voiceStopRequested = true;
       if (voiceRecognitionActive && voiceRecognition) {
         voiceRecognition.stop();
@@ -794,6 +860,47 @@
         if (!calculatorInputLocked) setVoiceState('IDLE');
       }, VOICE_INACTIVITY_TIMEOUT);
     }
+
+  function scheduleVoiceRecognitionRestart() {
+    if (
+      !voiceRecognition ||
+      calculatorInputLocked ||
+      !voiceListeningRequested ||
+      voiceRecognitionActive ||
+      voiceRecognitionStartPending ||
+      voiceRestartTimer !== null
+    ) return;
+
+    voiceRestartTimer = window.setTimeout(() => {
+      voiceRestartTimer = null;
+      startVoiceRecognition();
+    }, VOICE_RESTART_DELAY);
+  }
+
+  function startVoiceRecognition() {
+    if (
+      !voiceRecognition ||
+      calculatorInputLocked ||
+      !voiceListeningRequested ||
+      voiceRecognitionActive ||
+      voiceRecognitionStartPending
+    ) return;
+
+    window.clearTimeout(voiceRestartTimer);
+    voiceRestartTimer = null;
+    voiceRecognitionStartPending = true;
+    try {
+      voiceRecognition.start();
+    } catch (error) {
+      voiceRecognitionStartPending = false;
+      if (error.name === 'InvalidStateError') {
+        scheduleVoiceRecognitionRestart();
+        return;
+      }
+      voiceListeningRequested = false;
+      setVoiceState('ERROR', '音声入力を開始できませんでした');
+    }
+  }
 
   function normalizeVoiceText(text) {
       let normalized = text
@@ -867,12 +974,16 @@
       return String(total + section + digit);
     }
 
+  function endsWithVoiceEvaluationMarker(text) {
+    return /(?:=|＝|イコール|計算して|計算|結果)\s*$/.test(text);
+  }
+
   function parseVoiceCommand(rawText) {
       const normalized = normalizeVoiceText(rawText);
       if (['AC', 'DEL', '%', '='].includes(normalized)) return { type: 'action', action: normalized };
 
       const numericText = normalized.replace(/[零〇一二三四五六七八九十百千]+/g, match => parseJapaneseNumber(match));
-      const hasEvaluationMarker = /(?:=|＝|イコール|計算して|計算|結果)\s*$/.test(rawText);
+      const hasEvaluationMarker = endsWithVoiceEvaluationMarker(rawText);
       const relativeExpressionMatch = numericText.match(/^([+\-*\/])(\d+(?:\.\d+)?)(=)?$/);
       if (relativeExpressionMatch) {
         return {
@@ -920,13 +1031,13 @@
         key.classList.remove('voice-active');
         void key.offsetWidth;
         key.classList.add('voice-active');
-        window.setTimeout(() => {
+        scheduleVoiceFeedback(() => {
           key.classList.remove('voice-active');
           if (onComplete) onComplete();
         }, VOICE_KEY_GLOW_DURATION);
       };
       if (delay > 0) {
-        window.setTimeout(activate, delay);
+        scheduleVoiceFeedback(activate, delay);
         return;
       }
       const key = document.querySelector(selector);
@@ -934,7 +1045,7 @@
       key.classList.remove('voice-active');
       void key.offsetWidth;
       key.classList.add('voice-active');
-      window.setTimeout(() => {
+      scheduleVoiceFeedback(() => {
         key.classList.remove('voice-active');
         if (onComplete) onComplete();
       }, VOICE_KEY_GLOW_DURATION);
@@ -948,7 +1059,10 @@
     }
 
   function executeVoiceCommand(rawText) {
-      if (calculatorInputLocked) return false;
+      const isPendingEvaluation = voiceEvaluationPending;
+      if (calculatorInputLocked && !isPendingEvaluation) return false;
+      voiceEvaluationPending = false;
+      clearVoiceFeedback();
       const command = parseVoiceCommand(rawText);
       if (!command) {
         setVoiceState('ERROR', '計算として解釈できませんでした');
@@ -1038,23 +1152,36 @@
       voiceRecognition.maxAlternatives = 1;
 
       voiceRecognition.onstart = () => {
+        voiceRecognitionStartPending = false;
         voiceRecognitionActive = true;
         voiceStopRequested = false;
+        if (!voiceListeningRequested) {
+          voiceRecognition.stop();
+          return;
+        }
         setVoiceState(calculatorInputLocked ? 'LOCKED' : 'LISTENING');
         resetVoiceInactivityTimer();
       };
 
       voiceRecognition.onresult = event => {
-        if (calculatorInputLocked) return;
+        if (calculatorInputLocked && !voiceEvaluationPending) return;
         let interim = '';
+        let hasFinalResult = false;
         for (let index = event.resultIndex; index < event.results.length; index += 1) {
           const transcript = event.results[index][0].transcript;
-          if (event.results[index].isFinal) voiceFinalTranscript += transcript;
+          if (event.results[index].isFinal) {
+            voiceFinalTranscript += transcript;
+            hasFinalResult = true;
+          }
           else interim += transcript;
         }
+        if (!calculatorInputLocked && endsWithVoiceEvaluationMarker(`${voiceFinalTranscript}${interim}`)) {
+          lockForSpokenEvaluation();
+        }
         setVoiceTranscript(voiceFinalTranscript || interim);
+        if (calculatorInputLocked && voiceEvaluationPending && !hasFinalResult) return;
         if (voiceFinalTranscript) {
-          setVoiceState('PROCESSING');
+          if (!calculatorInputLocked) setVoiceState('PROCESSING');
           const succeeded = executeVoiceCommand(voiceFinalTranscript);
           if (succeeded && !calculatorInputLocked) {
             setVoiceState('LISTENING');
@@ -1067,35 +1194,56 @@
       voiceRecognition.onerror = event => {
         if (calculatorInputLocked) return;
         const message = voiceErrorMessage(event.error);
+        if (['not-allowed', 'service-not-allowed', 'audio-capture'].includes(event.error)) {
+          voiceListeningRequested = false;
+        }
         setVoiceState('ERROR', message);
         resetVoiceInactivityTimer();
       };
 
       voiceRecognition.onend = () => {
         voiceRecognitionActive = false;
+        voiceRecognitionStartPending = false;
         if (voiceStopRequested) {
           voiceStopRequested = false;
-          setVoiceState(calculatorInputLocked ? 'LOCKED' : 'IDLE');
         }
-        resetVoiceInactivityTimer();
+        if (voiceListeningRequested) {
+          setVoiceState(calculatorInputLocked ? 'LOCKED' : 'LISTENING');
+          if (!calculatorInputLocked) scheduleVoiceRecognitionRestart();
+        } else {
+          setVoiceState('IDLE');
+        }
       };
 
       voiceButton.addEventListener('click', () => {
-        if (voiceRecognitionActive) {
+        if (voiceListeningRequested) {
+          voiceListeningRequested = false;
+          releaseVoiceMicrophoneAccess();
+          window.clearTimeout(voiceRestartTimer);
+          voiceRestartTimer = null;
           voiceStopRequested = true;
-          voiceRecognition.stop();
+          if (voiceRecognitionActive) voiceRecognition.stop();
+          else setVoiceState('IDLE');
           return;
         }
         window.clearTimeout(voiceInactivityTimer);
         prepareVoiceSession();
+        voiceListeningRequested = true;
         setVoiceState('REQUESTING');
         voiceStopRequested = false;
-        try {
-          voiceRecognition.start();
-        } catch (error) {
-          voiceRecognitionActive = false;
-          setVoiceState('ERROR', '音声入力を開始できませんでした');
-        }
+        ensureVoiceMicrophoneAccess()
+          .then(() => {
+            if (voiceListeningRequested && !calculatorInputLocked) {
+              startVoiceRecognition();
+            } else if (!voiceListeningRequested) {
+              releaseVoiceMicrophoneAccess();
+            }
+          })
+          .catch(() => {
+            if (!voiceListeningRequested) return;
+            voiceListeningRequested = false;
+            setVoiceState('ERROR', 'マイクの使用を開始できませんでした');
+          });
       });
   }
 
