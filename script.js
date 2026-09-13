@@ -33,6 +33,7 @@
   let nextFireworkTime = 0;
   let fireworksAnimationId = null;
   let lastFireworksFrame = 0;
+  let fireworksCompletionCallback = null;
   let voiceRecognition = null;
   let voiceRecognitionActive = false;
   let voiceFinalTranscript = '';
@@ -41,6 +42,7 @@
   let voiceErrorResetTimer = null;
   let currentVoiceState = 'IDLE';
   let voiceStopRequested = false;
+  let calculatorInputLocked = false;
   const VOICE_INACTIVITY_TIMEOUT = 30000;
 
   const FIREWORK_FRAME_INTERVAL = 1000 / 30;
@@ -333,7 +335,7 @@
     flashLayer.classList.add('firework-flash');
   }
 
-  function stopFireworks() {
+  function stopFireworks(notifyCompletion = true) {
     if (fireworksAnimationId !== null) {
       cancelAnimationFrame(fireworksAnimationId);
       fireworksAnimationId = null;
@@ -347,10 +349,17 @@
     lastFireworksFrame = 0;
     fireworksContext.clearRect(0, 0, window.innerWidth, window.innerHeight);
     flashLayer.classList.remove('firework-flash');
+
+    if (notifyCompletion && fireworksCompletionCallback) {
+      const completionCallback = fireworksCompletionCallback;
+      fireworksCompletionCallback = null;
+      completionCallback();
+    }
   }
 
-  function startFireworks(totalLaunches = FIREWORK_LAUNCH_COUNT) {
-    stopFireworks();
+  function startFireworks(totalLaunches = FIREWORK_LAUNCH_COUNT, onComplete = null) {
+    stopFireworks(false);
+    fireworksCompletionCallback = onComplete;
 
     const now = performance.now();
     fireworksTargetCount = Math.max(1, Math.floor(totalLaunches));
@@ -572,7 +581,7 @@
   function evaluate() {
     if (!operator || previousValue === null || currentValue === 'Error') {
       pulseCalculator();
-      triggerMegaEffect();
+      triggerMegaEffect(calculatorInputLocked ? unlockCalculatorInput : null);
       return;
     }
 
@@ -584,7 +593,7 @@
 
     if (normalized === 'Error') {
       handleError('0では割れません');
-      triggerMegaEffect();
+      triggerMegaEffect(calculatorInputLocked ? unlockCalculatorInput : null);
       return;
     }
 
@@ -595,7 +604,7 @@
     waitingForOperand = true;
 
     updateDisplay(true);
-    triggerMegaEffect();
+    triggerMegaEffect(calculatorInputLocked ? unlockCalculatorInput : null);
   }
 
   function percent() {
@@ -652,11 +661,11 @@
     calculator.classList.add('overdrive');
   }
 
-  function triggerMegaEffect() {
+  function triggerMegaEffect(onComplete = null) {
     pulseCalculator();
-    stopFireworks();
+    stopFireworks(false);
     launchConfetti(120);
-    startFireworks(FIREWORK_LAUNCH_COUNT);
+    startFireworks(FIREWORK_LAUNCH_COUNT, onComplete);
     flashLayer.classList.remove('active');
     void flashLayer.offsetWidth;
     flashLayer.classList.add('active');
@@ -682,7 +691,7 @@
   }
 
   function processButton(button, event = {}) {
-    if (!button) return;
+    if (!button || calculatorInputLocked) return;
 
     createRipple(button, event);
 
@@ -709,6 +718,7 @@
       LISTENING: ['LISTENING', '認識中…'],
       PROCESSING: ['PROCESSING', '音声を解析しています…'],
       SUCCESS: ['SUCCESS', '認識しました'],
+      LOCKED: ['LOCKED', '花火演出中は入力できません'],
       ERROR: ['ERROR', '音声入力でエラーが発生しました'],
       UNSUPPORTED: ['UNSUPPORTED', 'この環境では音声入力を利用できません']
     };
@@ -736,6 +746,20 @@
   function setVoiceTranscript(text) {
       voiceTranscript.textContent = `認識: ${text || '—'}`;
     }
+
+  function unlockCalculatorInput() {
+    calculatorInputLocked = false;
+    if (voiceRecognition) voiceButton.disabled = false;
+    if (currentVoiceState === 'LOCKED') setVoiceState('IDLE');
+  }
+
+  function lockCalculatorInputUntilFireworksComplete() {
+    calculatorInputLocked = true;
+    voiceButton.disabled = true;
+    voiceStopRequested = true;
+    if (voiceRecognitionActive && voiceRecognition) voiceRecognition.stop();
+    setVoiceState('LOCKED');
+  }
 
   function resetVoiceInput() {
       window.clearTimeout(voiceInactivityTimer);
@@ -766,7 +790,7 @@
   function resetVoiceInactivityTimer() {
       window.clearTimeout(voiceInactivityTimer);
       voiceInactivityTimer = window.setTimeout(() => {
-        setVoiceState('IDLE');
+        if (!calculatorInputLocked) setVoiceState('IDLE');
       }, VOICE_INACTIVITY_TIMEOUT);
     }
 
@@ -914,6 +938,7 @@
     }
 
   function executeVoiceCommand(rawText) {
+      if (calculatorInputLocked) return false;
       const command = parseVoiceCommand(rawText);
       if (!command) {
         setVoiceState('ERROR', '計算として解釈できませんでした');
@@ -925,6 +950,7 @@
         if (command.action === 'DEL') backspace();
         if (command.action === '%') percent();
         if (command.action === '=') {
+          lockCalculatorInputUntilFireworksComplete();
           evaluate();
           scheduleVoiceTranscriptReset();
         }
@@ -941,6 +967,7 @@
         chooseOperator(command.operator);
         const rightLength = inputVoiceNumber(command.right, rightDelay);
         if (command.evaluate) {
+          lockCalculatorInputUntilFireworksComplete();
           activateVoiceKey('button[data-action="equals"]', rightDelay + rightLength * 1000);
           evaluate();
           scheduleVoiceTranscriptReset();
@@ -959,6 +986,7 @@
       const rightDelay = operatorDelay + 1000;
       const rightLength = inputVoiceNumber(command.right, rightDelay);
       if (command.evaluate) {
+        lockCalculatorInputUntilFireworksComplete();
         activateVoiceKey('button[data-action="equals"]', rightDelay + rightLength * 1000);
         evaluate();
         scheduleVoiceTranscriptReset();
@@ -995,11 +1023,12 @@
       voiceRecognition.onstart = () => {
         voiceRecognitionActive = true;
         voiceStopRequested = false;
-        setVoiceState('LISTENING');
+        setVoiceState(calculatorInputLocked ? 'LOCKED' : 'LISTENING');
         resetVoiceInactivityTimer();
       };
 
       voiceRecognition.onresult = event => {
+        if (calculatorInputLocked) return;
         let interim = '';
         for (let index = event.resultIndex; index < event.results.length; index += 1) {
           const transcript = event.results[index][0].transcript;
@@ -1010,7 +1039,7 @@
         if (voiceFinalTranscript) {
           setVoiceState('PROCESSING');
           const succeeded = executeVoiceCommand(voiceFinalTranscript);
-          if (succeeded) {
+          if (succeeded && !calculatorInputLocked) {
             setVoiceState('LISTENING');
           }
           voiceFinalTranscript = '';
@@ -1019,6 +1048,7 @@
       };
 
       voiceRecognition.onerror = event => {
+        if (calculatorInputLocked) return;
         const message = voiceErrorMessage(event.error);
         setVoiceState('ERROR', message);
         resetVoiceInactivityTimer();
@@ -1028,7 +1058,7 @@
         voiceRecognitionActive = false;
         if (voiceStopRequested) {
           voiceStopRequested = false;
-          setVoiceState('IDLE');
+          setVoiceState(calculatorInputLocked ? 'LOCKED' : 'IDLE');
         }
         resetVoiceInactivityTimer();
       };
@@ -1106,6 +1136,7 @@
     if (!selector) return;
 
     event.preventDefault();
+    if (calculatorInputLocked) return;
     const button = document.querySelector(selector);
     if (!button) return;
 
