@@ -1,32 +1,32 @@
-    <!doctype html>
-    <html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="要件定義書 - NEON BURST CALCULATOR"><title>要件定義書 | NEON BURST CALCULATOR</title><link rel="stylesheet" href="css/style.css"></head>
-    <body><header class="site-header"><div class="header-inner"><div><div class="brand">NEON BURST CALCULATOR / DEVELOPMENT DOCUMENTS</div><h1>要件定義書</h1><p class="lead">計算・音声入力・演出・品質要件と受入条件を定義します。</p></div><div class="doc-meta"><span>対象：calc-calc_voice</span><span>版：1.0</span><span>作成日：2026-09-13</span><span>文書番号：DOC-02</span></div></div></header><div class="layout"><nav class="sidebar" aria-label="文書ナビゲーション"><h2>文書一覧</h2><a class="" href="index.html">文書目次</a><div class="phase">企画</div><a class="" href="01_project_overview.html">01. プロジェクト概要書</a><div class="phase">要件定義</div><a class="current" href="02_requirements_definition.html">02. 要件定義書</a><a class="" href="03_calculator_voice_specification.html">03. 計算・音声入力仕様書</a><div class="phase">基本設計</div><a class="" href="04_basic_design.html">04. 基本設計書</a><a class="" href="05_screen_ui_design.html">05. 画面・UI設計書</a><div class="phase">詳細設計</div><a class="" href="06_detailed_design.html">06. 詳細設計書</a><div class="phase">実装</div><a class="" href="07_coding_and_development_guide.html">07. コーディング規約・開発手順書</a><div class="phase">テスト</div><a class="" href="08_test_plan_and_specification.html">08. テスト計画・テスト仕様書</a><div class="phase">リリース</div><a class="" href="09_release_guide_and_notes.html">09. リリース手順書・リリースノート</a><div class="phase">運用</div><a class="" href="10_user_and_operations_manual.html">10. 操作マニュアル・運用保守手順書</a></nav><main class="main"><article class="document">
-<section><h2>1. 要件定義の方針</h2><p>本書は、現行ソースから確認できる動作を機能要件・非機能要件として整理し、受入時に観察できる条件を明記します。音声入力の正式対象はGoogle Chrome for Windows 11 / Linuxです。</p></section>
-<section><h2>2. 機能要件</h2><div class="table-wrap"><table><thead><tr><th>ID</th><th>要件</th><th>受入条件</th><th>状態</th></tr></thead><tbody>
-<tr><td>FR-001</td><td>初期表示時、主表示を0として表示する。</td><td>起動直後のmainDisplayが0。</td><td><span class="badge done">実装済み</span></td></tr>
-<tr><td>FR-002</td><td>0～9をボタン・キーボードから入力できる。</td><td>入力値が表示へ反映される。</td><td><span class="badge done">実装済み</span></td></tr>
-<tr><td>FR-003</td><td>小数点を入力でき、同一数値への重複小数点を防ぐ。</td><td>「1..2」にならない。</td><td><span class="badge done">実装済み</span></td></tr>
-<tr><td>FR-004</td><td>加減乗除を実行できる。</td><td>代表値で正しい結果を表示。</td><td><span class="badge done">実装済み</span></td></tr>
-<tr><td>FR-005</td><td>0除算はErrorとして扱う。</td><td>「0では割れません」を通知。</td><td><span class="badge done">実装済み</span></td></tr>
-<tr><td>FR-006</td><td>%は現在値を100で除算する。</td><td>50% → 0.5。</td><td><span class="badge done">実装済み</span></td></tr>
-<tr><td>FR-007</td><td>DELで末尾1文字を削除する。</td><td>123 → 12。1桁は0。</td><td><span class="badge done">実装済み</span></td></tr>
-<tr><td>FR-008</td><td>ACで計算状態を初期化し、テーマを変更する。</td><td>表示0、式空、内部演算状態解除。</td><td><span class="badge done">実装済み</span></td></tr>
-<tr><td>FR-009</td><td>=で結果を表示し、花火・コンフェッティを再生する。</td><td>計算成立時に結果表示と演出。</td><td><span class="badge done">実装済み</span></td></tr>
-<tr><td>FR-010</td><td>=演出では花火を5発開始する。</td><td>FIREWORK_LAUNCH_COUNT=5。</td><td><span class="badge done">実装済み</span></td></tr>
-<tr><td>FR-011</td><td>キーボード操作に対応する。</td><td>0-9,+,-,*,/,Enter,=,Esc,Backspace,.,,,%が動作。</td><td><span class="badge done">実装済み</span></td></tr>
-<tr><td>FR-012</td><td>Google Chromeでは音声入力パネルを表示する。</td><td>Chrome判定成功時に初期化。</td><td><span class="badge done">実装済み</span></td></tr>
-<tr><td>FR-013</td><td>Chrome以外では音声入力パネルを非表示にする。</td><td><code>voicePanel.hidden=true</code>。</td><td><span class="badge done">実装済み</span></td></tr>
-<tr><td>FR-014</td><td>マイクボタンで音声入力を開始・停止できる。</td><td>押下でREQUESTING→LISTENING、再押下で停止。</td><td><span class="badge done">実装済み</span></td></tr>
-<tr><td>FR-015</td><td>音声認識言語をja-JPとする。</td><td><code>voiceRecognition.lang='ja-JP'</code>。</td><td><span class="badge done">実装済み</span></td></tr>
-<tr><td>FR-016</td><td>「12たす3イコール」等の単一二項演算を解釈する。</td><td>左項・演算子・右項・評価指示へ分解。</td><td><span class="badge done">実装済み</span></td></tr>
-<tr><td>FR-017</td><td>「プラス5」等の相対演算を解釈する。</td><td>現在値を左項として演算子・右項を適用。</td><td><span class="badge done">実装済み</span></td></tr>
-<tr><td>FR-018</td><td>「クリア」「削除」「パーセント」「イコール」を単一操作として解釈する。</td><td>対応ボタン相当の処理が動作。</td><td><span class="badge done">実装済み</span></td></tr>
-<tr><td>FR-019</td><td>認識結果を画面へ表示する。</td><td>voiceTranscriptに「認識: …」を表示。</td><td><span class="badge done">実装済み</span></td></tr>
-<tr><td>FR-020</td><td>音声状態をREADY / REQUESTING / LISTENING / PROCESSING / LOCKED / ERROR等で表示する。</td><td>状態遷移に合わせてvoiceStateとvoiceStatusが更新。</td><td><span class="badge done">実装済み</span></td></tr>
-<tr><td>FR-021</td><td>発話末尾に評価語がある場合、演出完了まで電卓入力をロックする。</td><td>花火完了後に解除される。</td><td><span class="badge done">実装済み</span></td></tr>
-<tr><td>FR-022</td><td>音声エラー時にエラー状態を表示し、セッションをリセットする。</td><td>ERROR表示後、規定時間でIDLEへ戻る。</td><td><span class="badge done">実装済み</span></td></tr>
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="NEON BURST CALCULATOR 要件定義書">
+<title>要件定義書 | NEON BURST CALCULATOR</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header class="site-header"><div class="header-inner"><div><div class="brand">NEON BURST CALCULATOR / DEVELOPMENT DOCUMENTS</div><h1>要件定義書</h1><p class="lead">電卓本体、音声入力、演出、品質条件と受入条件を定義します。</p></div><div class="doc-meta"><span>対象：calc-main</span><span>文書版：1.0</span><span>更新日：2026-09-13</span><span>状態：再作成版</span></div></div></header>
+<div class="layout"><nav class="sidebar" aria-label="文書ナビゲーション"><h2>文書一覧</h2><a class="" href="index.html">文書目次</a><div class="phase">企画</div><a class="" href="01_project_overview.html">01. プロジェクト概要書</a><div class="phase">要件定義</div><a class="current" href="02_requirements_definition.html">02. 要件定義書</a><a class="" href="03_calculator_voice_specification.html">03. 計算・音声入力仕様書</a><div class="phase">基本設計</div><a class="" href="04_basic_design.html">04. 基本設計書</a><a class="" href="05_screen_ui_design.html">05. 画面・UI設計書</a><div class="phase">詳細設計</div><a class="" href="06_detailed_design.html">06. 詳細設計書</a><div class="phase">実装</div><a class="" href="07_coding_and_development_guide.html">07. コーディング規約・開発手順書</a><div class="phase">テスト</div><a class="" href="08_test_plan_and_specification.html">08. テスト計画・テスト仕様書</a><div class="phase">リリース</div><a class="" href="09_release_guide_and_notes.html">09. リリース手順書・リリースノート</a><div class="phase">運用</div><a class="" href="10_user_and_operations_manual.html">10. 操作マニュアル・運用保守手順書</a></nav><main class="main"><article class="document">
+<section><h2>1. 要件の目的</h2><p>利用者がボタン、キーボード、音声のいずれからでも直感的に計算でき、計算結果を視覚演出とともに確認できることを目的とします。</p></section>
+<section><h2>2. 機能要件</h2><div class="table-wrap"><table><thead><tr><th>ID</th><th>要件</th><th>内容</th><th>状況</th></tr></thead><tbody>
+<tr><td>FR-001</td><td>数値入力</td><td>0～9を入力し、整数部を最大14桁まで保持する。</td><td><span class="status ok">実装済み</span></td></tr>
+<tr><td>FR-002</td><td>小数入力</td><td>1つの数値につき小数点を1回入力できる。</td><td><span class="status ok">実装済み</span></td></tr>
+<tr><td>FR-003</td><td>四則演算</td><td>加算、減算、乗算、除算を行う。</td><td><span class="status ok">実装済み</span></td></tr>
+<tr><td>FR-004</td><td>連続演算</td><td>演算子入力時に未確定の計算を評価し、次の演算へ継続できる。</td><td><span class="status ok">実装済み</span></td></tr>
+<tr><td>FR-005</td><td>パーセント</td><td>表示中の数値を100で割った値に変換する。</td><td><span class="status ok">実装済み</span></td></tr>
+<tr><td>FR-006</td><td>削除・初期化</td><td>DELで1文字削除、ACで計算状態を初期化する。</td><td><span class="status ok">実装済み</span></td></tr>
+<tr><td>FR-007</td><td>キーボード</td><td>数字、四則演算、Enter/=、Esc、Backspace、%、小数点を受け付ける。</td><td><span class="status ok">実装済み</span></td></tr>
+<tr><td>FR-008</td><td>音声入力</td><td>Google Chromeで日本語音声を認識し、数値・演算・操作へ変換する。</td><td><span class="status ok">実装済み</span></td></tr>
+<tr><td>FR-009</td><td>音声状態表示</td><td>READY、REQUESTING、LISTENING、PROCESSING、LOCKED、ERROR、UNSUPPORTEDを画面表示する。SUCCESSは表示定義のみ存在し、現行処理では遷移先として使用しない。</td><td><span class="status ok">実装済み</span></td></tr>
+<tr><td>FR-010</td><td>計算演出</td><td>= 実行時に表示アニメーション、コンフェッティ、花火5発を再生する。</td><td><span class="status ok">実装済み</span></td></tr>
+<tr><td>FR-011</td><td>テーマ</td><td>起動時に10種類からランダムテーマを適用し、AC時は別テーマへ切り替える。</td><td><span class="status ok">実装済み</span></td></tr>
+<tr><td>FR-012</td><td>エラー</td><td>0除算または音声認識失敗時にエラー状態を表示し、安全に状態を戻す。</td><td><span class="status ok">実装済み</span></td></tr>
 </tbody></table></div></section>
-<section><h2>3. 非機能要件</h2><div class="table-wrap"><table><thead><tr><th>ID</th><th>分類</th><th>要件</th><th>確認方法</th></tr></thead><tbody><tr><td>NFR-001</td><td>互換性</td><td>正式対象はGoogle Chrome for Windows 11 / Linux。</td><td>両OSで実機確認。</td></tr><tr><td>NFR-002</td><td>セキュリティ</td><td>音声・認識結果をアプリ独自に永続保存しない。</td><td>Storage/送信処理がないことを確認。</td></tr><tr><td>NFR-003</td><td>権限</td><td>音声利用時のみマイクアクセスを要求し、停止時にMediaStreamトラックを停止する。</td><td>権限ダイアログと停止処理を確認。</td></tr><tr><td>NFR-004</td><td>操作性</td><td>ボタン・キーボード・音声が同一の計算ロジックへ到達する。</td><td>同じ入力で同じ結果。</td></tr><tr><td>NFR-005</td><td>レスポンシブ</td><td>幅540px以下でパディング・キーサイズ等を縮小する。</td><td>Chrome DevToolsと実画面。</td></tr><tr><td>NFR-006</td><td>アクセシビリティ</td><td>主要出力にaria-label/aria-live、マイクにaria-pressedを設定する。</td><td>DOM属性確認。</td></tr><tr><td>NFR-007</td><td>動き低減</td><td>prefers-reduced-motion: reduce時にアニメーション時間を極小化する。</td><td>OS設定/DevToolsで確認。</td></tr><tr><td>NFR-008</td><td>保守性</td><td>計算、音声、演出、テーマを名前付き関数・定数へ分離する。</td><td>script.js構造確認。</td></tr><tr><td>NFR-009</td><td>配布性</td><td>ビルド工程なしで静的ホスティング可能。</td><td>HTML/CSS/JSのみであること。</td></tr><tr><td>NFR-010</td><td>表示性能</td><td>Canvas DPRを上限付きで設定し、画面非表示・リサイズ時に花火を停止する。</td><td>実装・動作確認。</td></tr></tbody></table></div></section>
-<section><h2>4. 音声入力の受入条件</h2><ol><li>Windows 11版Chromeでマイク許可後、「12たす3イコール」により15が表示される。</li><li>Linux版Chromeで同等の音声認識開始・停止ができる。</li><li>マイク許可を拒否した場合、ERROR状態になり、アプリ全体が停止しない。</li><li>非Chromeでは音声入力UIが表示されない。</li><li>音声計算で評価語を含む場合、花火演出中は追加入力が抑止され、完了後に操作可能へ戻る。</li><li>音声認識結果が永続保存されない。</li></ol></section>
-<section><h2>5. 要件トレーサビリティ</h2><div class="table-wrap"><table><thead><tr><th>要件群</th><th>主要実装</th><th>設計文書</th><th>テスト群</th></tr></thead><tbody><tr><td>FR-001～011</td><td>inputDigit / chooseOperator / evaluate / processButton / keydown</td><td>DOC-03,04,06</td><td>TC-CALC / TC-KEY</td></tr><tr><td>FR-012～022</td><td>setupVoiceInputForBrowser / initializeVoiceInput / parseVoiceCommand / executeVoiceCommand</td><td>DOC-03,04,06</td><td>TC-VOICE</td></tr><tr><td>NFR-001～003</td><td>isGoogleChrome / getUserMedia / releaseVoiceMicrophoneAccess</td><td>DOC-04,09,10</td><td>TC-ENV / TC-VOICE</td></tr><tr><td>NFR-005～007</td><td>style.css / ARIA属性</td><td>DOC-05</td><td>TC-UI / TC-A11Y</td></tr></tbody></table></div></section>
-<div class="nav-links"><a href="01_project_overview.html">← 前の文書</a><a href="03_calculator_voice_specification.html">次の文書 →</a></div></article></main></div><footer class="site-footer"><p>NEON BURST CALCULATOR 開発ドキュメント / calc-calc_voice / 2026-09-13</p></footer></body></html>
+<section><h2>3. 非機能要件</h2><div class="table-wrap"><table><thead><tr><th>ID</th><th>分類</th><th>要件</th></tr></thead><tbody><tr><td>NFR-001</td><td>対応環境</td><td>Google Chrome for Windows 11 / Linuxを正式対応とする。</td></tr><tr><td>NFR-002</td><td>レスポンシブ</td><td>狭幅では540px以下のCSS調整を適用し、電卓操作が継続できること。</td></tr><tr><td>NFR-003</td><td>アクセシビリティ</td><td>主要操作にbutton要素、aria-label、aria-live等を使用する。</td></tr><tr><td>NFR-004</td><td>モーション配慮</td><td><code>prefers-reduced-motion: reduce</code> ではアニメーション時間を最小化する。</td></tr><tr><td>NFR-005</td><td>データ保護</td><td>計算値・音声認識結果をアプリ独自に永続保存しない。</td></tr><tr><td>NFR-006</td><td>保守性</td><td>HTML/CSS/JSの責務を分離し、外部ビルドを不要とする。</td></tr><tr><td>NFR-007</td><td>文字コード</td><td>アプリ・README・開発文書をUTF-8で扱う。</td></tr></tbody></table></div></section>
+<section><h2>4. 受入条件</h2><ol><li>正式対応環境で画面が表示され、0～9、四則演算、小数、%、AC、DEL、= が操作できる。</li><li>キーボード操作が対応する画面ボタンと同じ結果になる。</li><li>0除算時に <code>Error</code> と「0では割れません」の通知が表示される。</li><li>= 実行後に結果が表示され、花火・コンフェッティ演出が開始される。</li><li>Google Chromeでは音声入力パネルが表示され、マイク許可後に日本語音声を認識できる。</li><li>「12たす3イコール」のような対応表現で計算結果15が得られる。</li><li>音声による=処理中はLOCKEDとなり、演出終了までキーボード・ボタン入力を受け付けない。</li><li>Chrome以外では音声入力パネルが非表示となり、通常の電卓機能は利用できる。</li></ol></section>
+<section><h2>5. 対象外要件</h2><ul><li>計算履歴の保存・検索</li><li>関数電卓・三角関数・指数関数</li><li>サーバー同期、アカウント、共有</li><li>音声認識精度そのものの保証</li><li>Chrome以外のブラウザ、Windows 11 / Linux以外のOSでの動作保証</li></ul></section><div class="nav-links"><a href="01_project_overview.html">← 01. プロジェクト概要書</a><a href="03_calculator_voice_specification.html">03. 計算・音声入力仕様書 →</a></div></article></main></div>
+<footer class="site-footer"><p>NEON BURST CALCULATOR 開発ドキュメント / UTF-8 / 2026-09-13</p></footer>
+</body></html>
