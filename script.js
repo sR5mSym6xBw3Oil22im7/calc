@@ -52,6 +52,7 @@
   const FIREWORK_EXPLOSION_SCALE = 3;
   const MAX_FIREWORK_ROCKETS = 4;
   const MAX_FIREWORK_SPARKS = 420;
+  const VOICE_KEY_GLOW_DURATION = 520;
 
   const flowerTypes = [
     'sakura',
@@ -909,14 +910,20 @@
       return [...value].length;
     }
 
-  function activateVoiceKey(selector, delay = 0) {
+  function activateVoiceKey(selector, delay = 0, onComplete = null) {
       const activate = () => {
         const key = document.querySelector(selector);
-        if (!key) return;
+        if (!key) {
+          if (onComplete) onComplete();
+          return;
+        }
         key.classList.remove('voice-active');
         void key.offsetWidth;
         key.classList.add('voice-active');
-        window.setTimeout(() => key.classList.remove('voice-active'), 520);
+        window.setTimeout(() => {
+          key.classList.remove('voice-active');
+          if (onComplete) onComplete();
+        }, VOICE_KEY_GLOW_DURATION);
       };
       if (delay > 0) {
         window.setTimeout(activate, delay);
@@ -927,14 +934,17 @@
       key.classList.remove('voice-active');
       void key.offsetWidth;
       key.classList.add('voice-active');
-      window.setTimeout(() => key.classList.remove('voice-active'), 520);
+      window.setTimeout(() => {
+        key.classList.remove('voice-active');
+        if (onComplete) onComplete();
+      }, VOICE_KEY_GLOW_DURATION);
     }
 
-  function activateVoiceAction(action, delay = 0) {
+  function activateVoiceAction(action, delay = 0, onComplete = null) {
       if (action === 'AC') activateVoiceKey('[data-action="clear"]', delay);
       if (action === 'DEL') activateVoiceKey('[data-action="backspace"]', delay);
       if (action === '%') activateVoiceKey('[data-action="percent"]', delay);
-      if (action === '=') activateVoiceKey('button[data-action="equals"]', delay);
+      if (action === '=') activateVoiceKey('button[data-action="equals"]', delay, onComplete);
     }
 
   function executeVoiceCommand(rawText) {
@@ -945,15 +955,16 @@
         return false;
       }
       if (command.type === 'action') {
+        if (command.action === '=') {
+          lockCalculatorInputUntilFireworksComplete();
+          activateVoiceAction(command.action, 0, evaluate);
+          scheduleVoiceTranscriptReset();
+          return true;
+        }
         activateVoiceAction(command.action);
         if (command.action === 'AC') clearAll(true);
         if (command.action === 'DEL') backspace();
         if (command.action === '%') percent();
-        if (command.action === '=') {
-          lockCalculatorInputUntilFireworksComplete();
-          evaluate();
-          scheduleVoiceTranscriptReset();
-        }
         return true;
       }
       if (command.type === 'number') {
@@ -968,8 +979,11 @@
         const rightLength = inputVoiceNumber(command.right, rightDelay);
         if (command.evaluate) {
           lockCalculatorInputUntilFireworksComplete();
-          activateVoiceKey('button[data-action="equals"]', rightDelay + rightLength * 1000);
-          evaluate();
+          activateVoiceKey(
+            'button[data-action="equals"]',
+            rightDelay + rightLength * 1000,
+            evaluate
+          );
           scheduleVoiceTranscriptReset();
         }
         if (currentValue === 'Error') {
@@ -987,8 +1001,11 @@
       const rightLength = inputVoiceNumber(command.right, rightDelay);
       if (command.evaluate) {
         lockCalculatorInputUntilFireworksComplete();
-        activateVoiceKey('button[data-action="equals"]', rightDelay + rightLength * 1000);
-        evaluate();
+        activateVoiceKey(
+          'button[data-action="equals"]',
+          rightDelay + rightLength * 1000,
+          evaluate
+        );
         scheduleVoiceTranscriptReset();
       }
       return true;
