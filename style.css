@@ -323,28 +323,6 @@ h1 {
   display: none;
 }
 
-.voice-toggle {
-  display: block;
-  margin: 0 auto 10px;
-  padding: 6px 14px;
-  border: 1px solid color-mix(in srgb, var(--cyan) 45%, transparent);
-  border-radius: 999px;
-  color: var(--cyan);
-  background: rgba(5, 4, 22, 0.74);
-  font: 900 10px/1.2 "Orbitron", sans-serif;
-  letter-spacing: 0.12em;
-  cursor: pointer;
-}
-
-.voice-toggle[hidden] {
-  display: none;
-}
-
-.voice-toggle:focus-visible {
-  outline: 3px solid var(--yellow);
-  outline-offset: 3px;
-}
-
 .voice-header {
   display: flex;
   align-items: center;

@@ -1251,18 +1251,10 @@
   }
 
   function setupVoiceInputForBrowser() {
-      const voiceToggle = document.getElementById('voiceToggle');
       if (!isGoogleChrome()) {
         voicePanel.hidden = true;
-        voiceToggle.hidden = true;
         return;
       }
-      voiceToggle.addEventListener('click', () => {
-        const willShow = voicePanel.hidden;
-        if (!willShow && voiceListeningRequested) voiceButton.click();
-        voicePanel.hidden = !willShow;
-        voiceToggle.setAttribute('aria-expanded', String(willShow));
-      });
       initializeVoiceInput();
   }
 
